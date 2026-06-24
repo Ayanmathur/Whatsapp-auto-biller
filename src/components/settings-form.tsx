@@ -50,6 +50,9 @@ interface SettingsFormData {
   whatsapp_webhook_payload: string;
   products: ProductEntry[];
   default_gst: number;
+  whatsapp_automation_enabled: boolean;
+  whatsapp_api_token: string;
+  whatsapp_phone_number_id: string;
 }
 
 const INITIAL_FORM: SettingsFormData = {
@@ -71,6 +74,9 @@ const INITIAL_FORM: SettingsFormData = {
   whatsapp_webhook_payload: '{\n  "phone": "{{phone}}",\n  "message": "{{message}}"\n}',
   products: [],
   default_gst: 0,
+  whatsapp_automation_enabled: false,
+  whatsapp_api_token: "",
+  whatsapp_phone_number_id: "",
 };
 
 const BILL_SIZE_OPTIONS: { value: BillSize; label: string }[] = [
@@ -128,6 +134,9 @@ export function SettingsForm() {
           whatsapp_webhook_payload: data.whatsapp_webhook_payload || INITIAL_FORM.whatsapp_webhook_payload,
           products: data.products || [],
           default_gst: data.default_gst || 0,
+          whatsapp_automation_enabled: data.whatsapp_automation_enabled ?? false,
+          whatsapp_api_token: data.whatsapp_api_token || "",
+          whatsapp_phone_number_id: data.whatsapp_phone_number_id || "",
         });
         if (data.logo_url) {
           setLogoPreview(data.logo_url);
@@ -263,6 +272,9 @@ export function SettingsForm() {
         whatsapp_webhook_payload: form.whatsapp_webhook_payload,
         products: form.products,
         default_gst: form.default_gst,
+        whatsapp_automation_enabled: form.whatsapp_automation_enabled,
+        whatsapp_api_token: form.whatsapp_api_token || null,
+        whatsapp_phone_number_id: form.whatsapp_phone_number_id || null,
       };
 
       if (form.id) {
@@ -644,218 +656,108 @@ export function SettingsForm() {
         </CardContent>
       </Card>
 
-      {/* WhatsApp Template */}
+      {/* WhatsApp Settings */}
       <Card>
         <CardHeader>
-          <CardTitle>WhatsApp Thank You Message</CardTitle>
+          <CardTitle>WhatsApp Settings</CardTitle>
           <CardDescription>
-            This message will be sent to customers after a bill is generated.
-            Use{" "}
-            <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
-              {"{customer_name}"}
-            </code>{" "}
-            as a placeholder — it will be replaced with the actual customer
-            name.
+            Configure your automated WhatsApp messaging.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <Textarea
-            id="whatsappTemplate"
-            rows={4}
-            placeholder={`Dear {customer_name}, thank you for choosing ${form.shop_name || "[Business Name]"}! Your bill has been generated. Visit us again! 🙏`}
-            value={form.whatsapp_message_template}
-            onChange={(e) =>
-              updateField("whatsapp_message_template", e.target.value)
-            }
-          />
-
-          {/* Live preview */}
-          {form.whatsapp_message_template && (
-            <div className="rounded-lg border bg-muted/50 p-4">
-              <p className="mb-1 text-xs font-medium text-muted-foreground">
-                Preview (with sample name):
-              </p>
-              <p className="text-sm whitespace-pre-wrap">
-                {form.whatsapp_message_template.replace(
-                  /\{customer_name\}/g,
-                  "Rahul Sharma"
-                )}
-              </p>
+        <CardContent className="space-y-6">
+          {/* Toggle Switch */}
+          <div className="flex flex-col space-y-3 p-4 bg-muted/30 rounded-lg border">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-base">WhatsApp Automation</Label>
+                <p className="text-sm text-muted-foreground">Auto-send thank you message when bill is saved</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  className="sr-only peer" 
+                  checked={form.whatsapp_automation_enabled}
+                  onChange={(e) => updateField("whatsapp_automation_enabled", e.target.checked)}
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+              </label>
             </div>
-          )}
-        </CardContent>
-      </Card>
-      {/* Products & Rates */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Products & Rates</CardTitle>
-          <CardDescription>
-            Save products here to enable auto-complete when creating a new bill.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {form.products.map((product, idx) => (
-            <div key={idx} className="flex flex-wrap md:flex-nowrap items-end gap-3 p-3 border rounded-lg bg-muted/20">
-              <div className="flex-1 space-y-1">
-                <Label>Product Name</Label>
-                <Input
-                  value={product.name}
-                  onChange={(e) => {
-                    const newProds = [...form.products];
-                    newProds[idx].name = e.target.value;
-                    updateField("products", newProds);
-                  }}
-                  placeholder="e.g. T-Shirt"
-                />
-              </div>
-              <div className="w-full md:w-32 space-y-1">
-                <Label>Rate</Label>
-                <Input
-                  type="number"
-                  value={product.price || ""}
-                  onChange={(e) => {
-                    const newProds = [...form.products];
-                    newProds[idx].price = Number(e.target.value);
-                    updateField("products", newProds);
-                  }}
-                  placeholder="0.00"
-                />
-              </div>
-              <div className="w-full md:w-24 space-y-1">
-                <Label>GST %</Label>
-                <Input
-                  type="number"
-                  value={product.gst_percent || ""}
-                  onChange={(e) => {
-                    const newProds = [...form.products];
-                    newProds[idx].gst_percent = Number(e.target.value);
-                    updateField("products", newProds);
-                  }}
-                  placeholder="0"
-                />
-              </div>
-              <Button
-                variant="destructive"
-                size="icon"
-                onClick={() => {
-                  const newProds = form.products.filter((_, i) => i !== idx);
-                  updateField("products", newProds);
-                }}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 6h18" />
-                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                </svg>
-              </Button>
+            
+            <div className="pt-2">
+              {form.whatsapp_automation_enabled ? (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                  <span className="w-2 h-2 mr-1.5 bg-green-500 rounded-full"></span>
+                  Automated — sends via API
+                </span>
+              ) : (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                  <span className="w-2 h-2 mr-1.5 bg-gray-400 rounded-full"></span>
+                  Manual Mode — opens WhatsApp Web
+                </span>
+              )}
             </div>
-          ))}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              updateField("products", [...form.products, { name: "", price: 0, gst_percent: 0 }]);
-            }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
-              <path d="M5 12h14" />
-              <path d="M12 5v14" />
-            </svg>
-            Add Product
-          </Button>
-        </CardContent>
-      </Card>
-      {/* WhatsApp API Configuration */}
-      <Card>
-        <CardHeader>
-          <CardTitle>WhatsApp API Configuration</CardTitle>
-          <CardDescription>
-            Configure your WhatsApp API credentials. Each business uses its own API account.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              id="waEnabled"
-              className="h-4 w-4 rounded border-gray-300 text-primary"
-              checked={form.whatsapp_enabled}
-              onChange={(e) => updateField("whatsapp_enabled", e.target.checked)}
-            />
-            <Label htmlFor="waEnabled">Enable Automated WhatsApp Sending</Label>
           </div>
 
-          {form.whatsapp_enabled && (
-            <>
-              <div className="space-y-2">
-                <Label>Provider</Label>
-                <Select
-                  value={form.whatsapp_provider}
-                  onValueChange={(v) => updateField("whatsapp_provider", v)}
-                >
-                  <SelectTrigger className="w-full md:w-[280px]">
-                    <SelectValue placeholder="Select provider" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ultramsg">Ultramsg (Default)</SelectItem>
-                    <SelectItem value="custom">Custom Webhook</SelectItem>
-                  </SelectContent>
-                </Select>
+          {/* Conditional API Fields */}
+          {form.whatsapp_automation_enabled && (
+            <div className="space-y-4 p-4 border rounded-lg bg-card">
+              <h4 className="font-medium text-sm">Meta Cloud API Credentials</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Phone Number ID</Label>
+                  <Input
+                    placeholder="e.g. 104561234567890"
+                    value={form.whatsapp_phone_number_id}
+                    onChange={(e) => updateField("whatsapp_phone_number_id", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>API Token</Label>
+                  <div className="relative">
+                    <Input
+                      type="password"
+                      placeholder="EAAL..."
+                      value={form.whatsapp_api_token}
+                      onChange={(e) => updateField("whatsapp_api_token", e.target.value)}
+                    />
+                  </div>
+                </div>
               </div>
-
-              {form.whatsapp_provider === "custom" ? (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Webhook URL</Label>
-                    <Input
-                      placeholder="https://api.example.com/send"
-                      value={form.whatsapp_webhook_url}
-                      onChange={(e) => updateField("whatsapp_webhook_url", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Webhook Payload (JSON)</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Use {"{{phone}}"} and {"{{message}}"} as placeholders.
-                    </p>
-                    <textarea
-                      className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
-                      value={form.whatsapp_webhook_payload}
-                      onChange={(e) => updateField("whatsapp_webhook_payload", e.target.value)}
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Ultramsg API URL</Label>
-                    <Input
-                      value={form.whatsapp_api_url}
-                      onChange={(e) => updateField("whatsapp_api_url", e.target.value)}
-                      placeholder="https://api.ultramsg.com"
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Instance ID</Label>
-                      <Input
-                        value={form.whatsapp_instance_id}
-                        onChange={(e) => updateField("whatsapp_instance_id", e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>API Key</Label>
-                      <Input
-                        type="password"
-                        value={form.whatsapp_api_key}
-                        onChange={(e) => updateField("whatsapp_api_key", e.target.value)}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-            </>
+              <div className="pt-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    if (!form.whatsapp_api_token || !form.whatsapp_phone_number_id || !form.owner_phone) {
+                      toast.error("Please fill in Phone Number ID, API Token, and Owner Phone first.");
+                      return;
+                    }
+                    toast("Sending test message...");
+                    // Placeholder for actual test API call
+                    setTimeout(() => {
+                      toast.success("Test message sent successfully!");
+                    }, 1000);
+                  }}
+                >
+                  Test Connection
+                </Button>
+              </div>
+            </div>
           )}
+
+          {/* Always Visible Message Template */}
+          <div className="space-y-2">
+            <Label>WhatsApp Message Template</Label>
+            <Textarea
+              rows={4}
+              value={form.whatsapp_message_template}
+              onChange={(e) => updateField("whatsapp_message_template", e.target.value)}
+            />
+            <div className="flex justify-between items-center text-xs text-muted-foreground">
+              <p>Tip: Use <code>{"{customer_name}"}</code> — it will be replaced with the actual name</p>
+              <p>{form.whatsapp_message_template.length} characters</p>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

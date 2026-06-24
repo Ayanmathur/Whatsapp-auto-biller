@@ -56,6 +56,9 @@ export interface Database {
           username: string
           next_billing_date: string
           created_at: string
+          whatsapp_automation_enabled: boolean | null
+          whatsapp_api_token: string | null
+          whatsapp_phone_number_id: string | null
         }
         Insert: {
           id?: string
@@ -79,6 +82,9 @@ export interface Database {
           username?: string
           next_billing_date?: string
           created_at?: string
+          whatsapp_automation_enabled?: boolean | null
+          whatsapp_api_token?: string | null
+          whatsapp_phone_number_id?: string | null
         }
         Update: {
           id?: string
@@ -102,6 +108,9 @@ export interface Database {
           username?: string
           next_billing_date?: string
           created_at?: string
+          whatsapp_automation_enabled?: boolean | null
+          whatsapp_api_token?: string | null
+          whatsapp_phone_number_id?: string | null
         }
       }
       bills: {
