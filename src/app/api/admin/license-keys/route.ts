@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 function isAdmin(request: NextRequest): boolean {
-  return request.cookies.get('admin_session')?.value === process.env.ADMIN_SESSION_SECRET
+  const secret = process.env.ADMIN_SESSION_SECRET || 'default_admin_session_secret_change_me'
+  return request.cookies.get('admin_session')?.value === secret
 }
 
 function generateKey(): string {

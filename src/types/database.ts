@@ -53,6 +53,8 @@ export interface Database {
           whatsapp_webhook_url: string | null
           whatsapp_webhook_payload: string | null
           products: ProductEntry[]
+          username: string
+          next_billing_date: string
           created_at: string
         }
         Insert: {
@@ -74,6 +76,8 @@ export interface Database {
           whatsapp_webhook_url?: string | null
           whatsapp_webhook_payload?: string | null
           products?: ProductEntry[]
+          username?: string
+          next_billing_date?: string
           created_at?: string
         }
         Update: {
@@ -95,6 +99,8 @@ export interface Database {
           whatsapp_webhook_url?: string | null
           whatsapp_webhook_payload?: string | null
           products?: ProductEntry[]
+          username?: string
+          next_billing_date?: string
           created_at?: string
         }
       }

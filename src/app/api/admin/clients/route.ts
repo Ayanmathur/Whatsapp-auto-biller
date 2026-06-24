@@ -3,7 +3,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 
 export async function GET(request: NextRequest) {
   const cookie = request.cookies.get('admin_session')?.value
-  if (cookie !== process.env.ADMIN_SESSION_SECRET) {
+  const secret = process.env.ADMIN_SESSION_SECRET || 'default_admin_session_secret_change_me'
+  if (cookie !== secret) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

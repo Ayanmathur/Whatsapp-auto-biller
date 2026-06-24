@@ -89,12 +89,14 @@ export function SettingsForm() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
   // ── Load existing settings ──────────────────────────────────────
   const loadSettings = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      setUserId(user.id);
 
       const { data, error } = await supabase
         .from("clients")
@@ -275,7 +277,7 @@ export function SettingsForm() {
         // Insert new
         const { data, error } = await supabase
           .from("clients")
-          .insert(payload)
+          .insert({ ...payload, user_id: userId })
           .select("id")
           .single();
 

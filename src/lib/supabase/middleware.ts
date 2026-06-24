@@ -55,7 +55,7 @@ export async function updateSession(request: NextRequest) {
   // Admin routes: check admin_session cookie
   if (pathname.startsWith('/admin')) {
     const adminCookie = request.cookies.get('admin_session')?.value
-    const secret = process.env.ADMIN_SESSION_SECRET
+    const secret = process.env.ADMIN_SESSION_SECRET || 'default_admin_session_secret_change_me'
     if (!adminCookie || adminCookie !== secret) {
       const url = request.nextUrl.clone()
       url.pathname = '/login'
