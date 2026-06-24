@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { sendWhatsappMessage } from "@/lib/sendWhatsapp";
 import type { BillSize, ProductEntry } from "@/types/database";
 
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,9 @@ interface ShopInfo {
   whatsapp_enabled: boolean;
   products?: ProductEntry[];
   default_gst?: number;
+  whatsapp_automation_enabled?: boolean;
+  whatsapp_api_token?: string;
+  whatsapp_phone_number_id?: string;
 }
 
 interface LineItem {
@@ -572,6 +576,122 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
     }
   }
 
+  // ── Send WhatsApp specific flow ────────────────────────────────
+  async function saveBillAndSendWhatsapp() {
+    if (!shop) {
+      toast.error("Business settings not loaded. Configure your business in Settings first.");
+      return;
+    }
+    if (!customerName.trim() || !customerPhone.trim()) {
+      toast.error("Customer name and phone are required to send WhatsApp.");
+      return;
+    }
+    const validItems = items.filter((i) => i.name.trim() && i.qty > 0 && i.price > 0);
+    if (validItems.length === 0) {
+      toast.error("Please add at least one valid item.");
+      return;
+    }
+
+    setSaving("send");
+
+    try {
+      const subtotal = calculations.subtotal;
+      const gst_amount = calculations.totalGST;
+      const total = calculations.grandTotal;
+
+      const today = getTodayString();
+      const dateForQuery = `${today.slice(0, 4)}-${today.slice(4, 6)}-${today.slice(6, 8)}`;
+      let newBillNumber = billNumber; 
+
+      const params = new URLSearchParams({ action: "count", billDate: dateForQuery });
+      if (clientId) params.set("clientId", clientId);
+      const countRes = await fetch(`/api/bills?${params.toString()}`);
+      if (countRes.ok) {
+        const json = await countRes.json();
+        const seq = ((json.count ?? 0) + 1).toString().padStart(3, "0");
+        newBillNumber = `BILL-${today}-${seq}`;
+      }
+
+      const billPayload = {
+        client_id: shop.id,
+        customer_name: customerName.trim(),
+        customer_phone: customerPhone,
+        bill_number: newBillNumber,
+        bill_date: billDate,
+        items: validItems.map((i) => ({
+          name: i.name.trim(),
+          qty: i.qty,
+          price: i.price,
+          gst_percent: i.gst_percent,
+        })),
+        subtotal,
+        gst_amount,
+        total,
+        whatsapp_sent: false,
+        whatsapp_sent_at: null,
+      };
+
+      const saveRes = await fetch("/api/bills", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ billPayload }), 
+      });
+
+      const saveJson = await saveRes.json();
+      if (!saveRes.ok) {
+        toast.error("Failed to save bill. Try again.");
+        return;
+      }
+
+      const newBillId = saveJson.data?.[0]?.id || newBillNumber;
+
+      // Now send whatsapp using the new utility
+      toast("Sending WhatsApp message...");
+      const waResult = await sendWhatsappMessage({
+        bill: {
+          id: newBillId,
+          customer_name: customerName.trim(),
+          customer_phone: customerPhone,
+        },
+        clientSettings: {
+          whatsapp_automation_enabled: shop.whatsapp_automation_enabled ?? false,
+          whatsapp_api_token: shop.whatsapp_api_token || null,
+          whatsapp_phone_number_id: shop.whatsapp_phone_number_id || null,
+          whatsapp_message_template: shop.whatsapp_message_template || "",
+          shop_name: shop.shop_name,
+        }
+      });
+
+      if (waResult.success) {
+        if (waResult.mode === "auto") {
+          toast.success("WhatsApp sent automatically!");
+        } else {
+          if (waResult.popupBlocked && waResult.url) {
+            toast.success("Bill saved! (Popup blocked)", {
+              action: { label: "Open WhatsApp", onClick: () => window.open(waResult.url, "_blank") }
+            });
+          } else {
+            toast.success("Bill saved! WhatsApp opened in new tab.");
+          }
+        }
+      } else {
+        toast.error(`WhatsApp failed: ${waResult.error}`);
+      }
+
+      setCustomerName("");
+      setCustomerPhone("");
+      setItems([createEmptyItem(shop.default_gst || 0)]);
+      setSavedBillId(null);
+      generateBillNumber();
+
+    } catch (err) {
+      console.error("Send failed:", err);
+      toast.error("Failed to save bill. Try again.");
+    } finally {
+      setSaving(null);
+    }
+  }
+
   // ── Reset form helper ─────────────────────────────────────────
   function resetForm() {
     setCustomerName("");
@@ -1024,10 +1144,9 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
 
       {/* Action Buttons */}
       <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-end gap-3 pb-6">
-        <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
         <Button
           variant="secondary"
-          onClick={() => handleSave("send")}
+          onClick={saveBillAndSendWhatsapp}
           disabled={saving !== null}
           size="lg"
           className="bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600"
@@ -1038,7 +1157,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
 
         <Button
           variant="outline"
-          onClick={() => handleSave("print")}
+          onClick={saveBillAndPrint}
           disabled={saving !== null}
           size="lg"
         >
@@ -1055,7 +1174,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
           {saving === "save" ? <Spinner /> : null}
           Save only
         </Button>
-        </div>
+      </div>
       </div>
     </div>
   );
