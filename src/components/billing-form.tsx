@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
 import type { BillSize, ProductEntry } from "@/types/database";
 
 import { Button } from "@/components/ui/button";
@@ -98,7 +97,6 @@ function getTodayString(): string {
 
 // ── Component ─────────────────────────────────────────────────────
 export function BillingForm({ clientId, editBillId }: { clientId?: string, editBillId?: string }) {
-  const supabase = createClient();
 
   // Shop info
   const [shop, setShop] = useState<ShopInfo | null>(null);
@@ -120,30 +118,21 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
   const [items, setItems] = useState<LineItem[]>([createEmptyItem()]);
 
   // Saving
-  const [saving, setSaving] = useState<string | null>(null); // null | 'print' | 'whatsapp' | 'save'
+  const [saving, setSaving] = useState<string | null>(null);
 
-  // ── Load shop settings ────────────────────────────────────────
+  // ── Load shop settings (via server API to bypass RLS) ──────────
   const loadShop = useCallback(async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user && !clientId) return;
+      // We need user ID to find the client. Get it from auth, then call our API.
+      const params = new URLSearchParams({ action: "shop" });
+      if (clientId) params.set("clientId", clientId);
 
-      let query = supabase
-        .from("clients")
-        .select("id, shop_name, shop_address, gst_number, logo_url, bill_size, whatsapp_message_template, owner_phone, products, whatsapp_enabled, default_gst");
+      const res = await fetch(`/api/bills?${params.toString()}`);
+      if (!res.ok) throw new Error("Failed to load shop");
 
-      if (clientId) {
-        query = query.eq("id", clientId);
-      } else if (user) {
-        query = query.eq("user_id", user.id);
-      }
-
-      const { data, error } = await query.single();
-
-      if (error && error.code !== "PGRST116") throw error;
-
-      if (data) {
-        const shopData = data as ShopInfo;
+      const json = await res.json();
+      if (json.data) {
+        const shopData = json.data as ShopInfo;
         setShop(shopData);
         setItems(prev => [{ ...prev[0], gst_percent: shopData.default_gst || 0 }]);
       }
@@ -152,28 +141,26 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
     } finally {
       setLoadingShop(false);
     }
-  }, [supabase, clientId]);
+  }, [clientId]);
 
-  // ── Generate bill number ──────────────────────────────────────
+  // ── Generate bill number (via server API) ──────────────────────
   const generateBillNumber = useCallback(async () => {
     try {
       const today = getTodayString();
       const dateForQuery = `${today.slice(0, 4)}-${today.slice(4, 6)}-${today.slice(6, 8)}`;
 
-      const { count, error } = await supabase
-        .from("bills")
-        .select("id", { count: "exact", head: true })
-        .eq("bill_date", dateForQuery);
+      const params = new URLSearchParams({ action: "count", billDate: dateForQuery });
+      if (clientId) params.set("clientId", clientId);
 
-      if (error) throw error;
+      const res = await fetch(`/api/bills?${params.toString()}`);
+      const json = await res.json();
 
-      const seq = ((count ?? 0) + 1).toString().padStart(3, "0");
+      const seq = ((json.count ?? 0) + 1).toString().padStart(3, "0");
       setBillNumber(`BILL-${today}-${seq}`);
     } catch {
-      // Fallback if query fails
       setBillNumber(`BILL-${getTodayString()}-001`);
     }
-  }, [supabase]);
+  }, [clientId]);
 
   useEffect(() => {
     loadShop();
@@ -182,22 +169,23 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
     }
   }, [loadShop, generateBillNumber, editBillId]);
 
-  // ── Load bill for editing ─────────────────────────────────────
+  // ── Load bill for editing (via server API) ─────────────────────
   useEffect(() => {
     if (!editBillId) return;
     
     async function fetchBill() {
-      const { data, error } = await supabase
-        .from("bills")
-        .select("*")
-        .eq("id", editBillId)
-        .single();
+      const params = new URLSearchParams({ action: "bill", billId: editBillId! });
+      if (clientId) params.set("clientId", clientId);
       
-      if (error || !data) {
+      const res = await fetch(`/api/bills?${params.toString()}`);
+      const json = await res.json();
+      
+      if (!res.ok || !json.data) {
         toast.error("Failed to load bill for editing.");
         return;
       }
       
+      const data = json.data;
       setCustomerName(data.customer_name || "");
       setCustomerPhone(data.customer_phone || "");
       setBillNumber(data.bill_number);
@@ -214,7 +202,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       }
     }
     fetchBill();
-  }, [editBillId, supabase]);
+  }, [editBillId, clientId]);
 
   // ── Phone validation ──────────────────────────────────────────
   function handlePhoneChange(value: string) {
@@ -299,15 +287,13 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
     };
   }, [items]);
 
-  // ── Save bill ─────────────────────────────────────────────────
+  // ── Save bill (via server API to bypass RLS) ──────────────────
   async function handleSave(action: "send" | "print" | "save") {
-    // Validation
     if (!shop) {
       toast.error("Business settings not loaded. Configure your business in Settings first.");
       return;
     }
 
-    // For Send, phone is required. For Print/Save, name is enough.
     if (action === "send" && customerPhone.length !== 10) {
       toast.error("Please enter a valid 10-digit phone number to send WhatsApp.");
       return;
@@ -337,23 +323,20 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
         whatsapp_sent_at: (action === "send") && shop.whatsapp_enabled ? new Date().toISOString() : null,
       };
 
-      let dbData, dbError;
-      if (editBillId) {
-        const res = await supabase.from("bills").update(billPayload).eq("id", editBillId).select("id");
-        dbData = res.data;
-        dbError = res.error;
-      } else {
-        const res = await supabase.from("bills").insert(billPayload).select("id");
-        dbData = res.data;
-        dbError = res.error;
+      // Use server API route (bypasses RLS with admin key)
+      const saveRes = await fetch("/api/bills", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ billPayload, editBillId }),
+      });
+
+      const saveJson = await saveRes.json();
+
+      if (!saveRes.ok) {
+        throw new Error(saveJson.error || "Failed to save bill");
       }
 
-      if (dbError) {
-        console.error("Supabase DB error:", JSON.stringify(dbError));
-        throw new Error(dbError.message || "Database error");
-      }
-
-      const billId = dbData?.[0]?.id || billPayload.bill_number;
+      const billId = saveJson.data?.[0]?.id || billPayload.bill_number;
 
       if (action === "print") {
         toast.success("Bill saved! Opening print preview...");
