@@ -6,11 +6,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ClientDashboard } from '@/components/client-dashboard'
 import { HistoryClient } from '@/components/history-client'
 import { BillingForm } from '@/components/billing-form'
+import { BulkMessageClient } from '@/components/bulk-message-client'
 
 export default async function AdminClientPage({
   params,
+  searchParams,
 }: {
-  params: { id: string }
+  params: { id: string };
+  searchParams: { editBillId?: string };
 }) {
   const cookieStore = cookies()
   const adminSession = cookieStore.get('admin_session')?.value
@@ -41,11 +44,12 @@ export default async function AdminClientPage({
         </div>
         
         <div className="space-y-6">
-          <Tabs defaultValue="dashboard" className="w-full">
+          <Tabs defaultValue={searchParams.editBillId ? "new-bill" : "dashboard"} className="w-full">
             <TabsList className="mb-4">
               <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-              <TabsTrigger value="new-bill">New Bill</TabsTrigger>
+              <TabsTrigger value="new-bill">{searchParams.editBillId ? "Edit Bill" : "New Bill"}</TabsTrigger>
               <TabsTrigger value="history">Bill History</TabsTrigger>
+              <TabsTrigger value="bulk-message">Bulk Message</TabsTrigger>
               <TabsTrigger value="settings">Settings</TabsTrigger>
             </TabsList>
             
@@ -54,11 +58,15 @@ export default async function AdminClientPage({
             </TabsContent>
 
             <TabsContent value="new-bill">
-              <BillingForm />
+              <BillingForm clientId={params.id} editBillId={searchParams.editBillId} />
             </TabsContent>
             
             <TabsContent value="history">
               <HistoryClient clientId={params.id} />
+            </TabsContent>
+
+            <TabsContent value="bulk-message">
+              <BulkMessageClient clientId={params.id} />
             </TabsContent>
             
             <TabsContent value="settings">

@@ -125,7 +125,7 @@ export function SettingsForm() {
           whatsapp_webhook_url: data.whatsapp_webhook_url || "",
           whatsapp_webhook_payload: data.whatsapp_webhook_payload || INITIAL_FORM.whatsapp_webhook_payload,
           products: data.products || [],
-          default_gst: Number(localStorage.getItem("default_gst")) || 0,
+          default_gst: data.default_gst || 0,
         });
         if (data.logo_url) {
           setLogoPreview(data.logo_url);
@@ -260,10 +260,8 @@ export function SettingsForm() {
         whatsapp_webhook_url: form.whatsapp_webhook_url.trim() || null,
         whatsapp_webhook_payload: form.whatsapp_webhook_payload,
         products: form.products,
+        default_gst: form.default_gst,
       };
-
-      // Save default GST locally to avoid database migrations
-      localStorage.setItem("default_gst", form.default_gst.toString());
 
       if (form.id) {
         // Update existing
@@ -611,6 +609,35 @@ export function SettingsForm() {
                 PNG, JPG, or SVG. Recommended size: 200×200px.
               </p>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Default Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Billing Defaults</CardTitle>
+          <CardDescription>
+            Configure default settings for your new bills.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2 max-w-sm">
+            <Label htmlFor="defaultGst">
+              Default GST (%)
+            </Label>
+            <Input
+              id="defaultGst"
+              type="number"
+              min="0"
+              max="100"
+              placeholder="e.g. 18"
+              value={form.default_gst}
+              onChange={(e) => updateField("default_gst", Number(e.target.value) || 0)}
+            />
+            <p className="text-xs text-muted-foreground">
+              This GST rate will automatically apply to all new items added to your bills.
+            </p>
           </div>
         </CardContent>
       </Card>

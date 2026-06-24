@@ -12,9 +12,9 @@ export async function POST(request: NextRequest) {
       clientId?: string;
     };
 
-    if (!phone || !message || !billId) {
+    if (!phone || !message) {
       return NextResponse.json(
-        { success: false, error: "Missing required fields: phone, message, billId" },
+        { success: false, error: "Missing required fields: phone, message" },
         { status: 400 }
       );
     }

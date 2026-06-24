@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
@@ -35,6 +36,7 @@ export function HistoryClient({ clientId }: { clientId?: string }) {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [dateRange, setDateRange] = useState("all");
+  const pathname = usePathname();
 
   const fetchBills = useCallback(async () => {
     setLoading(true);
@@ -231,6 +233,14 @@ export function HistoryClient({ clientId }: { clientId?: string }) {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right space-x-2">
+                        <Button variant="ghost" size="sm" onClick={() => {
+                          const route = pathname.includes('/admin') 
+                            ? `/admin/client/${clientId}?editBillId=${b.id}` 
+                            : `/history/edit/${b.id}`;
+                          window.open(route, '_self');
+                        }}>
+                          Edit
+                        </Button>
                         <Button variant="ghost" size="sm" onClick={() => window.open(`/api/print?id=${b.id}`, '_blank')}>
                           Print
                         </Button>

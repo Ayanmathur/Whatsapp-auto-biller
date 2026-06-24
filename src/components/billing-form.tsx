@@ -97,7 +97,7 @@ function getTodayString(): string {
 }
 
 // ── Component ─────────────────────────────────────────────────────
-export function BillingForm({ clientId }: { clientId?: string }) {
+export function BillingForm({ clientId, editBillId }: { clientId?: string, editBillId?: string }) {
   const supabase = createClient();
 
   // Shop info
@@ -130,7 +130,7 @@ export function BillingForm({ clientId }: { clientId?: string }) {
 
       let query = supabase
         .from("clients")
-        .select("id, shop_name, shop_address, gst_number, logo_url, bill_size, whatsapp_message_template, owner_phone, products, whatsapp_enabled");
+        .select("id, shop_name, shop_address, gst_number, logo_url, bill_size, whatsapp_message_template, owner_phone, products, whatsapp_enabled, default_gst");
 
       if (clientId) {
         query = query.eq("id", clientId);
@@ -144,10 +144,8 @@ export function BillingForm({ clientId }: { clientId?: string }) {
 
       if (data) {
         const shopData = data as ShopInfo;
-        const localDefaultGst = Number(localStorage.getItem("default_gst")) || 0;
-        shopData.default_gst = localDefaultGst;
         setShop(shopData);
-        setItems(prev => [{ ...prev[0], gst_percent: localDefaultGst }]);
+        setItems(prev => [{ ...prev[0], gst_percent: shopData.default_gst || 0 }]);
       }
     } catch (err) {
       console.error("Failed to load shop info:", err);
@@ -179,8 +177,44 @@ export function BillingForm({ clientId }: { clientId?: string }) {
 
   useEffect(() => {
     loadShop();
-    generateBillNumber();
-  }, [loadShop, generateBillNumber]);
+    if (!editBillId) {
+      generateBillNumber();
+    }
+  }, [loadShop, generateBillNumber, editBillId]);
+
+  // ── Load bill for editing ─────────────────────────────────────
+  useEffect(() => {
+    if (!editBillId) return;
+    
+    async function fetchBill() {
+      const { data, error } = await supabase
+        .from("bills")
+        .select("*")
+        .eq("id", editBillId)
+        .single();
+      
+      if (error || !data) {
+        toast.error("Failed to load bill for editing.");
+        return;
+      }
+      
+      setCustomerName(data.customer_name || "");
+      setCustomerPhone(data.customer_phone || "");
+      setBillNumber(data.bill_number);
+      
+      if (data.items && Array.isArray(data.items) && data.items.length > 0) {
+         const loadedItems = data.items.map((item: any) => ({
+           id: item.id || generateItemId(),
+           name: item.name || "",
+           qty: item.qty || 1,
+           price: item.price || 0,
+           gst_percent: item.gst_percent || 0
+         }));
+         setItems(loadedItems);
+      }
+    }
+    fetchBill();
+  }, [editBillId, supabase]);
 
   // ── Phone validation ──────────────────────────────────────────
   function handlePhoneChange(value: string) {
@@ -301,17 +335,25 @@ export function BillingForm({ clientId }: { clientId?: string }) {
         subtotal: calculations.subtotal,
         gst_amount: calculations.totalGST,
         total: calculations.grandTotal,
-        whatsapp_sent: action === "send" || action === "print_and_send",
-        whatsapp_sent_at: (action === "send" || action === "print_and_send") && shop.whatsapp_enabled ? new Date().toISOString() : null,
+        whatsapp_sent_at: (action === "send") && shop.whatsapp_enabled ? new Date().toISOString() : null,
       };
 
-      const { data, error } = await supabase.from("bills").insert(billPayload).select("id");
+      let dbData, dbError;
+      if (editBillId) {
+        const res = await supabase.from("bills").update(billPayload).eq("id", editBillId).select("id");
+        dbData = res.data;
+        dbError = res.error;
+      } else {
+        const res = await supabase.from("bills").insert(billPayload).select("id");
+        dbData = res.data;
+        dbError = res.error;
+      }
 
-      if (error) throw error;
+      if (dbError) throw dbError;
 
-      const isPrint = action === "print" || action === "print_and_send";
-      const isSend = action === "send" || action === "print_and_send";
-      const billId = data?.[0]?.id || billPayload.bill_number;
+      const isPrint = action === "print";
+      const isSend = action === "send";
+      const billId = dbData?.[0]?.id || billPayload.bill_number;
 
       if (isPrint) {
         toast.success("Bill saved! Opening print preview...");
@@ -335,7 +377,7 @@ export function BillingForm({ clientId }: { clientId?: string }) {
               body: JSON.stringify({
                 phone: customerPhone,
                 message,
-                billId: data?.[0]?.id || billPayload.bill_number,
+                billId: dbData?.[0]?.id || billPayload.bill_number,
                 clientId: shop.id
               }),
             });
@@ -817,16 +859,6 @@ export function BillingForm({ clientId }: { clientId?: string }) {
       {/* Action Buttons */}
       <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-end gap-3 pb-6">
         <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
-        <Button
-          onClick={() => handleSave("print_and_send")}
-          disabled={saving !== null}
-          size="lg"
-          className="bg-primary text-primary-foreground hover:bg-primary/90"
-        >
-          {saving === "print_and_send" ? <Spinner /> : null}
-          Print and Send
-        </Button>
-
         <Button
           variant="secondary"
           onClick={() => handleSave("send")}
