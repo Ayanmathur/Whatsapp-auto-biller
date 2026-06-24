@@ -572,7 +572,7 @@ export function AdminDashboard() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Shop Name</TableHead>
+                  <TableHead>Business Name</TableHead>
                   <TableHead>Username</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead>Registered At</TableHead>

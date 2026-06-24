@@ -29,7 +29,7 @@ interface Bill {
   items: Record<string, unknown>[];
 }
 
-export function HistoryClient() {
+export function HistoryClient({ clientId }: { clientId?: string }) {
   const supabase = createClient();
   const [bills, setBills] = useState<Bill[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,10 +42,24 @@ export function HistoryClient() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      let shopId = clientId;
+      if (!shopId) {
+        const { data: clientData } = await supabase
+          .from("clients")
+          .select("id")
+          .eq("auth_id", user.id)
+          .single();
+        if (clientData) {
+          shopId = clientData.id;
+        }
+      }
+
+      if (!shopId) return;
+
       let query = supabase
         .from("bills")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("client_id", shopId)
         .order("created_at", { ascending: false });
 
       // Apply date filter

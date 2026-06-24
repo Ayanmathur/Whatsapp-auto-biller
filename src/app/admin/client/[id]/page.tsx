@@ -2,6 +2,10 @@ import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { AdminClientSettings } from './client'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ClientDashboard } from '@/components/client-dashboard'
+import { HistoryClient } from '@/components/history-client'
+import { BillingForm } from '@/components/billing-form'
 
 export default async function AdminClientPage({
   params,
@@ -37,7 +41,30 @@ export default async function AdminClientPage({
         </div>
         
         <div className="space-y-6">
-          <AdminClientSettings initialClient={client} />
+          <Tabs defaultValue="dashboard" className="w-full">
+            <TabsList className="mb-4">
+              <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+              <TabsTrigger value="new-bill">New Bill</TabsTrigger>
+              <TabsTrigger value="history">Bill History</TabsTrigger>
+              <TabsTrigger value="settings">Settings</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="dashboard">
+              <ClientDashboard clientId={params.id} />
+            </TabsContent>
+
+            <TabsContent value="new-bill">
+              <BillingForm />
+            </TabsContent>
+            
+            <TabsContent value="history">
+              <HistoryClient clientId={params.id} />
+            </TabsContent>
+            
+            <TabsContent value="settings">
+              <AdminClientSettings initialClient={client} />
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
     </main>

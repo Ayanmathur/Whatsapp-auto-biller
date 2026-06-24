@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import type { BillSize } from "@/types/database";
+import type { BillSize, ProductEntry } from "@/types/database";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -41,6 +41,7 @@ interface SettingsFormData {
   whatsapp_provider: string;
   whatsapp_webhook_url: string;
   whatsapp_webhook_payload: string;
+  products: ProductEntry[];
 }
 
 const INITIAL_FORM: SettingsFormData = {
@@ -59,7 +60,8 @@ const INITIAL_FORM: SettingsFormData = {
   whatsapp_enabled: true,
   whatsapp_provider: "ultramsg",
   whatsapp_webhook_url: "",
-  whatsapp_webhook_payload: '{"to": "{{phone}}", "message": "{{message}}"}',
+  whatsapp_webhook_payload: '{\n  "phone": "{{phone}}",\n  "message": "{{message}}"\n}',
+  products: [],
 };
 
 const BILL_SIZE_OPTIONS: { value: BillSize; label: string }[] = [
@@ -112,7 +114,8 @@ export function SettingsForm() {
           whatsapp_enabled: data.whatsapp_enabled ?? true,
           whatsapp_provider: data.whatsapp_provider || "ultramsg",
           whatsapp_webhook_url: data.whatsapp_webhook_url || "",
-          whatsapp_webhook_payload: data.whatsapp_webhook_payload || '{"to": "{{phone}}", "message": "{{message}}"}',
+          whatsapp_webhook_payload: data.whatsapp_webhook_payload || INITIAL_FORM.whatsapp_webhook_payload,
+          products: data.products || [],
         });
         if (data.logo_url) {
           setLogoPreview(data.logo_url);
@@ -208,11 +211,11 @@ export function SettingsForm() {
   async function handleSave() {
     // Validation
     if (!form.shop_name.trim()) {
-      toast.error("Shop Name is required.");
+      toast.error("Business Name is required.");
       return;
     }
     if (!form.shop_address.trim()) {
-      toast.error("Shop Address is required.");
+      toast.error("Business Address is required.");
       return;
     }
     if (!form.gst_number.trim()) {
@@ -246,6 +249,7 @@ export function SettingsForm() {
         whatsapp_provider: form.whatsapp_provider,
         whatsapp_webhook_url: form.whatsapp_webhook_url.trim() || null,
         whatsapp_webhook_payload: form.whatsapp_webhook_payload.trim() || null,
+        products: form.products,
       };
 
       if (form.id) {
@@ -315,19 +319,19 @@ export function SettingsForm() {
   // ── Form ────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
-      {/* Shop Information */}
+      {/* Business Information */}
       <Card>
         <CardHeader>
-          <CardTitle>Shop Information</CardTitle>
+          <CardTitle>Business Information</CardTitle>
           <CardDescription>
             Your business details that will appear on generated bills.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
-          {/* Shop Name */}
+          {/* Business Name */}
           <div className="space-y-2">
             <Label htmlFor="shopName">
-              Shop Name <span className="text-destructive">*</span>
+              Business Name <span className="text-destructive">*</span>
             </Label>
             <Input
               id="shopName"
@@ -337,10 +341,10 @@ export function SettingsForm() {
             />
           </div>
 
-          {/* Shop Address */}
+          {/* Business Address */}
           <div className="space-y-2">
             <Label htmlFor="shopAddress">
-              Shop Address <span className="text-destructive">*</span>
+              Business Address <span className="text-destructive">*</span>
             </Label>
             <Textarea
               id="shopAddress"
@@ -411,9 +415,9 @@ export function SettingsForm() {
       {/* Logo Upload */}
       <Card>
         <CardHeader>
-          <CardTitle>Shop Logo</CardTitle>
+          <CardTitle>Business Logo</CardTitle>
           <CardDescription>
-            Upload your shop logo to display on bills. Max 2MB, image files
+            Upload your business logo to display on bills. Max 2MB, image files
             only.
           </CardDescription>
         </CardHeader>
@@ -424,7 +428,7 @@ export function SettingsForm() {
               {logoPreview ? (
                 <Image
                   src={logoPreview}
-                  alt="Shop logo"
+                  alt="Business logo"
                   width={128}
                   height={128}
                   className="h-full w-full object-contain"
@@ -552,7 +556,7 @@ export function SettingsForm() {
           <Textarea
             id="whatsappTemplate"
             rows={4}
-            placeholder={`Dear {customer_name}, thank you for shopping at ${form.shop_name || "[Shop Name]"}! Your bill has been generated. Visit us again! 🙏`}
+            placeholder={`Dear {customer_name}, thank you for choosing ${form.shop_name || "[Business Name]"}! Your bill has been generated. Visit us again! 🙏`}
             value={form.whatsapp_message_template}
             onChange={(e) =>
               updateField("whatsapp_message_template", e.target.value)
@@ -575,13 +579,92 @@ export function SettingsForm() {
           )}
         </CardContent>
       </Card>
-
+      {/* Products & Rates */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Products & Rates</CardTitle>
+          <CardDescription>
+            Save products here to enable auto-complete when creating a new bill.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {form.products.map((product, idx) => (
+            <div key={idx} className="flex flex-wrap md:flex-nowrap items-end gap-3 p-3 border rounded-lg bg-muted/20">
+              <div className="flex-1 space-y-1">
+                <Label>Product Name</Label>
+                <Input
+                  value={product.name}
+                  onChange={(e) => {
+                    const newProds = [...form.products];
+                    newProds[idx].name = e.target.value;
+                    updateField("products", newProds);
+                  }}
+                  placeholder="e.g. T-Shirt"
+                />
+              </div>
+              <div className="w-full md:w-32 space-y-1">
+                <Label>Rate</Label>
+                <Input
+                  type="number"
+                  value={product.price || ""}
+                  onChange={(e) => {
+                    const newProds = [...form.products];
+                    newProds[idx].price = Number(e.target.value);
+                    updateField("products", newProds);
+                  }}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="w-full md:w-24 space-y-1">
+                <Label>GST %</Label>
+                <Input
+                  type="number"
+                  value={product.gst_percent || ""}
+                  onChange={(e) => {
+                    const newProds = [...form.products];
+                    newProds[idx].gst_percent = Number(e.target.value);
+                    updateField("products", newProds);
+                  }}
+                  placeholder="0"
+                />
+              </div>
+              <Button
+                variant="destructive"
+                size="icon"
+                onClick={() => {
+                  const newProds = form.products.filter((_, i) => i !== idx);
+                  updateField("products", newProds);
+                }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6h18" />
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                </svg>
+              </Button>
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              updateField("products", [...form.products, { name: "", price: 0, gst_percent: 0 }]);
+            }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
+              <path d="M5 12h14" />
+              <path d="M12 5v14" />
+            </svg>
+            Add Product
+          </Button>
+        </CardContent>
+      </Card>
       {/* WhatsApp API Configuration */}
       <Card>
         <CardHeader>
           <CardTitle>WhatsApp API Configuration</CardTitle>
           <CardDescription>
-            Configure your WhatsApp API credentials. Each shop uses its own API account.
+            Configure your WhatsApp API credentials. Each business uses its own API account.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -674,8 +757,8 @@ export function SettingsForm() {
       <div className="flex items-center justify-between rounded-lg border bg-card p-4">
         <p className="text-sm text-muted-foreground">
           {form.id
-            ? "Update your shop settings."
-            : "Save to create your shop profile."}
+            ? "Update your business settings."
+            : "Save to create your business profile."}
         </p>
         <Button onClick={handleSave} disabled={saving} size="lg">
           {saving ? (

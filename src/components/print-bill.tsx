@@ -93,7 +93,7 @@ export function PrintBill({ data }: { data: PrintBillData | null }) {
           {data.logoUrl && !thermal && (
             <div className="bill-logo">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={data.logoUrl} alt="Shop Logo" />
+              <img src={data.logoUrl} alt="Business Logo" />
             </div>
           )}
           {data.logoUrl && thermal && (

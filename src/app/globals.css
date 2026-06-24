@@ -81,30 +81,18 @@
    ================================================================ */
 
 @media print {
-  /* Hide everything except the print bill */
-  body > * {
-    display: none !important;
+  body * {
+    visibility: hidden;
   }
 
-  body > .print-bill-container,
-  #print-bill {
-    display: block !important;
-  }
-
-  body {
-    background: white !important;
-    color: black !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+  .print-bill-container, .print-bill-container * {
+    visibility: visible;
   }
 
   .print-bill-container {
-    display: block !important;
     position: absolute;
-    top: 0;
     left: 0;
+    top: 0;
     width: 100%;
     background: white;
     color: black;
