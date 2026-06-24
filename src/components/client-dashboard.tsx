@@ -104,7 +104,22 @@ export function ClientDashboard({ clientId }: { clientId?: string }) {
     return true;
   });
 
-  const totalRevenue = filteredBills.reduce((acc, b) => acc + Number(b.total), 0);
+  // Independent revenue calculations
+  const now = new Date();
+  let dailyRevenue = 0;
+  let weeklyRevenue = 0;
+  let monthlyRevenue = 0;
+
+  bills.forEach((b) => {
+    const date = new Date(b.created_at);
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+
+    const total = Number(b.total) || 0;
+    if (diffDays <= 1) dailyRevenue += total;
+    if (diffDays <= 7) weeklyRevenue += total;
+    if (diffDays <= 30) monthlyRevenue += total;
+  });
   const totalBills = filteredBills.length;
   const totalWhatsApps = filteredBills.filter(b => b.whatsapp_sent).length;
   
@@ -226,17 +241,39 @@ export function ClientDashboard({ clientId }: { clientId?: string }) {
         </Alert>
       )}
 
-      {/* Metrics */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* Revenue Metrics */}
+      <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+            <CardTitle className="text-sm font-medium">Daily Revenue</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">₹{totalRevenue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</div>
-            <p className="text-xs text-muted-foreground">In selected period</p>
+            <div className="text-2xl font-bold">₹{dailyRevenue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</div>
+            <p className="text-xs text-muted-foreground">Last 24 hours</p>
           </CardContent>
         </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Weekly Revenue</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">₹{weeklyRevenue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</div>
+            <p className="text-xs text-muted-foreground">Last 7 days</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Monthly Revenue</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">₹{monthlyRevenue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</div>
+            <p className="text-xs text-muted-foreground">Last 30 days</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Other Metrics */}
+      <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Bills</CardTitle>

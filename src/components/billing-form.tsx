@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import type { BillSize, ProductEntry } from "@/types/database";
-import { PrintBill, type PrintBillData } from "@/components/print-bill";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -121,7 +120,6 @@ export function BillingForm({ clientId }: { clientId?: string }) {
 
   // Saving
   const [saving, setSaving] = useState<string | null>(null); // null | 'print' | 'whatsapp' | 'save'
-  const [printData, setPrintData] = useState<PrintBillData | null>(null);
   const pendingResetRef = useRef(false);
 
   // ── Load shop settings ────────────────────────────────────────
@@ -280,10 +278,6 @@ export function BillingForm({ clientId }: { clientId?: string }) {
     }
 
     const validItems = items.filter((i) => i.name.trim() && i.qty > 0 && i.price > 0);
-    if (validItems.length === 0) {
-      toast.error("Add at least one valid item with name, quantity, and price.");
-      return;
-    }
 
     setSaving(action);
 
@@ -313,33 +307,14 @@ export function BillingForm({ clientId }: { clientId?: string }) {
 
       const isPrint = action === "print" || action === "print_and_send";
       const isSend = action === "send" || action === "print_and_send";
+      const billId = data?.[0]?.id || billPayload.bill_number;
 
       if (isPrint) {
         toast.success("Bill saved! Opening print dialog...");
-        const pd: PrintBillData = {
-          shopName: shop.shop_name,
-          shopAddress: shop.shop_address,
-          gstNumber: shop.gst_number,
-          logoUrl: shop.logo_url,
-          billSize: shop.bill_size,
-          billNumber,
-          billDate,
-          customerName: customerName.trim(),
-          customerPhone,
-          items: validItems.map((i) => ({
-            name: i.name.trim(),
-            qty: i.qty,
-            price: i.price,
-            gst_percent: i.gst_percent,
-          })),
-          subtotal: calculations.subtotal,
-          gstSlabs: calculations.slabs,
-          totalGST: calculations.totalGST,
-          grandTotal: calculations.grandTotal,
-        };
-        setPrintData(pd);
         pendingResetRef.current = !isSend; // if we also send, reset happens after sending
-        setTimeout(() => window.print(), 300);
+        
+        // Open the dedicated print page
+        window.open(`/print/${billId}`, "_blank");
       }
 
       if (isSend) {
@@ -406,7 +381,6 @@ export function BillingForm({ clientId }: { clientId?: string }) {
     function handleAfterPrint() {
       if (pendingResetRef.current) {
         pendingResetRef.current = false;
-        setPrintData(null);
         resetForm();
       }
     }
@@ -433,7 +407,7 @@ export function BillingForm({ clientId }: { clientId?: string }) {
   }
 
   // ── Render ────────────────────────────────────────────────────
-  return (<>
+  return (
     <div className="space-y-6">
       {/* Shop Header */}
       <Card>
@@ -841,7 +815,21 @@ export function BillingForm({ clientId }: { clientId?: string }) {
       </Card>
 
       {/* Action Buttons */}
-      <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-end gap-3 pb-6">
+      <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-3 pb-6">
+        <Button
+          variant="ghost"
+          onClick={resetForm}
+          disabled={saving !== null}
+          className="text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-auto w-full"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
+            <path d="M3 6h18" />
+            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+          </svg>
+          Clear / New Bill
+        </Button>
+        <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
         <Button
           onClick={() => handleSave("print_and_send")}
           disabled={saving !== null}
@@ -882,12 +870,10 @@ export function BillingForm({ clientId }: { clientId?: string }) {
           {saving === "save" ? <Spinner /> : null}
           Save only
         </Button>
+        </div>
       </div>
     </div>
-
-    {/* Print bill — hidden on screen, rendered on print */}
-    <PrintBill data={printData} />
-  </>);
+  );
 }
 
 // ── Spinner helper ──────────────────────────────────────────────
