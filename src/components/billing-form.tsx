@@ -476,20 +476,13 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
   // ── Print specific flow ──────────────────────────────────────
   // ── Print specific flow ──────────────────────────────────────
   async function saveAndPrint() {
-    // Validate
     if (!customerName.trim()) {
       alert('Enter customer name')
       return
     }
 
-    // OPEN TAB IMMEDIATELY on click to prevent popup block
-    const newTab = window.open('about:blank', '_blank');
-    if (!newTab) {
-      alert('Popup blocked. Please allow popups for this site and try again.');
-      return; // Stop if we can't open a tab
-    }
-
     setSaving("print");
+
     try {
       const supabase = createClient();
       
@@ -506,58 +499,152 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       const billNumberLocal = 'BILL-' + todayCompact + '-' + 
         String((count || 0) + 1).padStart(3, '0')
 
-      const billData = {
-        client_id: shop?.id,
-        customer_name: customerName.trim(),
-        customer_phone: customerPhone.replace(/\D/g, '').slice(-10),
-        bill_number: billNumberLocal,
-        bill_date: today,
-        items: items.filter(i => i.name && i.qty && i.price),
-        subtotal: calculations.subtotal || 0,
-        gst_amount: calculations.totalGST || 0,
-        total: calculations.grandTotal || 0,
-        whatsapp_sent: false,
-      }
+      const validItems = items.filter(i => i.name && i.qty && i.price)
 
       const { data: saved, error } = await supabase
         .from('bills')
-        .insert(billData)
+        .insert({
+          client_id: shop?.id,
+          customer_name: customerName.trim(),
+          customer_phone: customerPhone.replace(/\D/g, '').slice(-10),
+          bill_number: billNumberLocal,
+          bill_date: today,
+          items: validItems,
+          subtotal: calculations.subtotal || 0,
+          gst_amount: calculations.totalGST || 0,
+          total: calculations.grandTotal || 0,
+          whatsapp_sent: false,
+        })
         .select('id')
         .single()
 
       if (error) {
-        if (newTab) newTab.close()
         alert('Save failed: ' + error.message)
+        setSaving(null)
         return
       }
-
+      
       setSavedBillId(saved.id);
       setBillNumber(billNumberLocal);
 
-      // Pass ALL data needed for print via URL params
-      const printData = {
-        billId: saved.id,
-        billNumber: billNumberLocal,
-        billDate: today,
-        customerName: customerName.trim(),
-        customerPhone: customerPhone.replace(/\D/g, '').slice(-10),
-        items: items.filter(i => i.name && i.qty && i.price),
-        subtotal: calculations.subtotal || 0,
-        gstAmount: calculations.totalGST || 0,
-        total: calculations.grandTotal || 0,
-        shopName: shop?.shop_name || '',
-        shopAddress: shop?.shop_address || '',
-        gstNumber: shop?.gst_number || '',
-        logoUrl: shop?.logo_url || '',
+      // Build bill HTML as a string — inject into print-area div
+      const itemRows = validItems.map((item, i) => {
+        const amt = Number(item.qty) * Number(item.price) *
+          (1 + Number(item.gst_percent || 0) / 100)
+        return `
+          <tr style="background:${i % 2 === 0 ? '#fff' : '#fafafa'}">
+            <td style="padding:5px 8px">${i + 1}</td>
+            <td style="padding:5px 8px">${item.name}</td>
+            <td style="padding:5px 8px;text-align:right">${item.qty}</td>
+            <td style="padding:5px 8px;text-align:right">
+              ₹${Number(item.price).toFixed(2)}
+            </td>
+            <td style="padding:5px 8px;text-align:right">
+              ${item.gst_percent || 0}%
+            </td>
+            <td style="padding:5px 8px;text-align:right">
+              ₹${amt.toFixed(2)}
+            </td>
+          </tr>`
+      }).join('')
+
+      const itemsSection = validItems.length > 0 ? `
+        <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:12px">
+          <thead>
+            <tr style="background:#f3f4f6">
+              <th style="padding:6px 8px;text-align:left">#</th>
+              <th style="padding:6px 8px;text-align:left">Item</th>
+              <th style="padding:6px 8px;text-align:right">Qty</th>
+              <th style="padding:6px 8px;text-align:right">Rate</th>
+              <th style="padding:6px 8px;text-align:right">GST%</th>
+              <th style="padding:6px 8px;text-align:right">Amount</th>
+            </tr>
+          </thead>
+          <tbody>${itemRows}</tbody>
+        </table>
+        <div style="display:flex;justify-content:flex-end">
+          <div style="width:200px;font-size:13px">
+            <div style="display:flex;justify-content:space-between;padding:3px 0;border-top:1px solid #ddd">
+              <span>Subtotal</span>
+              <span>₹${Number(calculations.subtotal || 0).toFixed(2)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:3px 0">
+              <span>GST</span>
+              <span>₹${Number(calculations.totalGST || 0).toFixed(2)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:6px 0;border-top:2px solid #333;font-weight:bold;font-size:15px">
+              <span>Total</span>
+              <span>₹${Number(calculations.grandTotal || 0).toFixed(2)}</span>
+            </div>
+          </div>
+        </div>` : ''
+
+      const billHtml = `
+        <div style="font-family:Arial,sans-serif;font-size:13px;color:#000;padding:16mm;max-width:740px;margin:0 auto">
+          
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+            <div>
+              ${shop?.logo_url
+                ? `<img src="${shop.logo_url}" style="max-height:60px;margin-bottom:8px;display:block" />`
+                : ''}
+              <div style="font-size:18px;font-weight:bold">
+                ${shop?.shop_name || ''}
+              </div>
+              <div style="color:#555;font-size:12px">
+                ${shop?.shop_address || ''}
+              </div>
+              ${shop?.gst_number
+                ? `<div style="color:#555;font-size:12px">
+                    GSTIN: ${shop.gst_number}
+                   </div>`
+                : ''}
+            </div>
+            <div style="text-align:right">
+              <div style="font-weight:bold;font-size:15px">${billNumberLocal}</div>
+              <div style="color:#555;font-size:12px">
+                ${new Date(today).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </div>
+            </div>
+          </div>
+
+          <hr style="border:none;border-top:1.5px solid #ddd;margin:10px 0" />
+
+          <div style="margin-bottom:16px">
+            <div style="font-weight:600;margin-bottom:2px">Bill To:</div>
+            <div>${customerName.trim()}</div>
+            <div style="color:#555;font-size:12px">
+              ${customerPhone.replace(/\D/g, '').slice(-10)}
+            </div>
+          </div>
+
+          ${itemsSection}
+
+          <div style="text-align:center;color:#999;font-size:11px;margin-top:24px;padding-top:10px;border-top:1px solid #eee">
+            Thank you for your business!
+          </div>
+        </div>
+      `
+
+      // Inject into print area
+      const printArea = document.getElementById('print-area')
+      if (printArea) {
+        printArea.innerHTML = billHtml
+        printArea.style.display = 'block'
+
+        // Trigger print
+        window.print()
+
+        // After print dialog closes, restore (use onafterprint event)
+        window.onafterprint = () => {
+          printArea.innerHTML = ''
+          printArea.style.display = 'none'
+          window.onafterprint = null
+        }
+      } else {
+        toast.error("Print area not found");
       }
-
-      const encoded = encodeURIComponent(JSON.stringify(printData))
-      const previewUrl = '/bill-preview?data=' + encoded
-
-      if (newTab) newTab.location.href = previewUrl;
     } catch (err) {
       console.error(err);
-      if (newTab) newTab.close()
       toast.error("Failed to save and print.");
     } finally {
       setSaving(null);
@@ -1085,6 +1172,8 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
         </Button>
       </div>
 
+      {/* Hidden print area — only visible when printing */}
+      <div id="print-area" style={{ display: 'none' }} />
     </div>
   );
 }
