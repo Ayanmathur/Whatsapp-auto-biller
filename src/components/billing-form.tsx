@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import type { BillSize, ProductEntry } from "@/types/database";
@@ -45,6 +45,7 @@ interface ShopInfo {
   owner_phone: string;
   whatsapp_enabled: boolean;
   products?: ProductEntry[];
+  default_gst?: number;
 }
 
 interface LineItem {
@@ -69,13 +70,13 @@ function generateItemId() {
   return `item-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-function createEmptyItem(): LineItem {
+function createEmptyItem(defaultGst = 0): LineItem {
   return {
     id: generateItemId(),
     name: "",
     qty: 1,
     price: 0,
-    gst_percent: 18,
+    gst_percent: defaultGst,
   };
 }
 
@@ -120,7 +121,6 @@ export function BillingForm({ clientId }: { clientId?: string }) {
 
   // Saving
   const [saving, setSaving] = useState<string | null>(null); // null | 'print' | 'whatsapp' | 'save'
-  const pendingResetRef = useRef(false);
 
   // ── Load shop settings ────────────────────────────────────────
   const loadShop = useCallback(async () => {
@@ -130,7 +130,7 @@ export function BillingForm({ clientId }: { clientId?: string }) {
 
       let query = supabase
         .from("clients")
-        .select("id, shop_name, shop_address, gst_number, logo_url, bill_size, whatsapp_message_template, owner_phone, products, whatsapp_enabled");
+        .select("id, shop_name, shop_address, gst_number, logo_url, bill_size, whatsapp_message_template, owner_phone, products, whatsapp_enabled, default_gst");
 
       if (clientId) {
         query = query.eq("id", clientId);
@@ -143,7 +143,9 @@ export function BillingForm({ clientId }: { clientId?: string }) {
       if (error && error.code !== "PGRST116") throw error;
 
       if (data) {
-        setShop(data as ShopInfo);
+        const shopData = data as ShopInfo;
+        setShop(shopData);
+        setItems(prev => [{ ...prev[0], gst_percent: shopData.default_gst || 0 }]);
       }
     } catch (err) {
       console.error("Failed to load shop info:", err);
@@ -310,8 +312,7 @@ export function BillingForm({ clientId }: { clientId?: string }) {
       const billId = data?.[0]?.id || billPayload.bill_number;
 
       if (isPrint) {
-        toast.success("Bill saved! Opening print dialog...");
-        pendingResetRef.current = !isSend; // if we also send, reset happens after sending
+        toast.success("Bill saved! Opening print preview...");
         
         // Open the dedicated print page
         window.open(`/print/${billId}`, "_blank");
@@ -339,7 +340,7 @@ export function BillingForm({ clientId }: { clientId?: string }) {
             if (!waRes.ok) throw new Error("Failed to send WhatsApp");
             toast.success("WhatsApp sent automatically!");
           } catch {
-            toast.error("Failed to send automated WhatsApp. Opening manual fallback.");
+            toast("Opening WhatsApp manually...");
             const waUrl = `https://wa.me/91${customerPhone}?text=${encodeURIComponent(message)}`;
             window.open(waUrl, "_blank");
           }
@@ -348,16 +349,10 @@ export function BillingForm({ clientId }: { clientId?: string }) {
           const waUrl = `https://wa.me/91${customerPhone}?text=${encodeURIComponent(message)}`;
           window.open(waUrl, "_blank");
         }
-        
-        // Wait for print dialog trigger to fire if it's a print_and_send
-        setTimeout(() => {
-           resetForm();
-        }, isPrint ? 500 : 0);
       } 
       
       if (!isPrint && !isSend) {
         toast.success("Bill saved successfully!");
-        resetForm();
       }
     } catch (err: unknown) {
       console.error("Save failed:", err);
@@ -372,22 +367,9 @@ export function BillingForm({ clientId }: { clientId?: string }) {
   function resetForm() {
     setCustomerName("");
     setCustomerPhone("");
-    setItems([createEmptyItem()]);
+    setItems([createEmptyItem(shop?.default_gst || 0)]);
     generateBillNumber();
   }
-
-  // ── After-print handler: reset form after print dialog closes ─
-  useEffect(() => {
-    function handleAfterPrint() {
-      if (pendingResetRef.current) {
-        pendingResetRef.current = false;
-        resetForm();
-      }
-    }
-    window.addEventListener("afterprint", handleAfterPrint);
-    return () => window.removeEventListener("afterprint", handleAfterPrint);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // ── Loading state ─────────────────────────────────────────────
   if (loadingShop) {

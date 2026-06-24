@@ -79,14 +79,15 @@ function isThermal(billSize: BillSize): boolean {
 }
 
 // ── Component ─────────────────────────────────────────────────────
-export function PrintBill({ data }: { data: PrintBillData | null }) {
+export function PrintBill({ data, previewMode = false }: { data: PrintBillData | null; previewMode?: boolean }) {
   if (!data) return null;
 
   const thermal = isThermal(data.billSize);
   const sizeClass = getSizeClass(data.billSize);
+  const baseClass = previewMode ? "print-bill-preview" : "print-bill-container";
 
   return (
-    <div id="print-bill" className={`print-bill-container ${sizeClass}`}>
+    <div id="print-bill" className={`${baseClass} ${sizeClass}`}>
       <div className="print-bill-inner">
         {/* ── Header ──────────────────────────────────────────── */}
         <div className="bill-header">

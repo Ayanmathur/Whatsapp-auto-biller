@@ -82,7 +82,7 @@ export default async function PrintPage({ params }: { params: { id: string } }) 
   return (
     <>
       <PrintPreviewClient />
-      <PrintBill data={printData} />
+      <PrintBill data={printData} previewMode={true} />
     </>
   )
 }

@@ -14,13 +14,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -49,7 +42,6 @@ interface SettingsFormData {
   whatsapp_webhook_url: string;
   whatsapp_webhook_payload: string;
   products: ProductEntry[];
-  default_gst: number;
 }
 
 const INITIAL_FORM: SettingsFormData = {
@@ -70,7 +62,6 @@ const INITIAL_FORM: SettingsFormData = {
   whatsapp_webhook_url: "",
   whatsapp_webhook_payload: '{\n  "phone": "{{phone}}",\n  "message": "{{message}}"\n}',
   products: [],
-  default_gst: 0,
 };
 
 const BILL_SIZE_OPTIONS: { value: BillSize; label: string }[] = [
@@ -125,7 +116,6 @@ export function SettingsForm() {
           whatsapp_webhook_url: data.whatsapp_webhook_url || "",
           whatsapp_webhook_payload: data.whatsapp_webhook_payload || INITIAL_FORM.whatsapp_webhook_payload,
           products: data.products || [],
-          default_gst: data.default_gst || 0,
         });
         if (data.logo_url) {
           setLogoPreview(data.logo_url);
@@ -258,9 +248,8 @@ export function SettingsForm() {
         whatsapp_enabled: form.whatsapp_enabled,
         whatsapp_provider: form.whatsapp_provider,
         whatsapp_webhook_url: form.whatsapp_webhook_url.trim() || null,
-        whatsapp_webhook_payload: form.whatsapp_webhook_payload,
+        whatsapp_webhook_payload: form.whatsapp_webhook_payload.trim() || null,
         products: form.products,
-        default_gst: form.default_gst,
       };
 
       if (form.id) {
@@ -468,7 +457,7 @@ export function SettingsForm() {
 
             {/* Upload controls */}
             <div className="flex flex-col gap-3">
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   onClick={() => fileInputRef.current?.click()}
@@ -523,78 +512,14 @@ export function SettingsForm() {
 
                 {logoPreview && (
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     onClick={handleRemoveLogo}
-                    disabled={uploading}
+                    className="text-destructive hover:text-destructive"
                   >
                     Remove
                   </Button>
                 )}
-                
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button variant="secondary" size="sm">View Sample Bill</Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-2xl bg-white max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle>Sample Bill (Black & White)</DialogTitle>
-                    </DialogHeader>
-                    <div className="mt-4 p-6 border rounded-lg print-bill-preview filter grayscale mx-auto">
-                      <div className="print-bill-inner" style={{width: form.bill_size.includes("thermal") ? "300px" : "100%"}}>
-                        <div className="flex gap-3 mb-4 items-start">
-                          {logoPreview && (
-                            <div className="w-16 h-16 relative flex-shrink-0">
-                              <Image src={logoPreview} alt="Logo" fill className="object-contain" />
-                            </div>
-                          )}
-                          <div>
-                            <h2 className="text-xl font-bold uppercase">{form.shop_name || "BUSINESS NAME"}</h2>
-                            <p className="text-sm">{form.shop_address || "123 Business Street"}</p>
-                            <p className="text-sm">GSTIN: {form.gst_number || "22AAAAA0000A1Z5"}</p>
-                          </div>
-                        </div>
-                        <hr className="border-t border-black my-4 border-dashed" />
-                        <div className="flex justify-between text-sm mb-4">
-                          <div>
-                            <p>Bill No: <strong>#SAMPLE-1</strong></p>
-                            <p>Date: {new Date().toLocaleDateString()}</p>
-                          </div>
-                          <div className="text-right">
-                            <p>Name: <strong>John Doe</strong></p>
-                            <p>Ph: 9876543210</p>
-                          </div>
-                        </div>
-                        <table className="w-full text-sm mb-4 text-left border-collapse">
-                          <thead>
-                            <tr className="border-y border-black">
-                              <th className="py-2">Item</th>
-                              <th className="py-2">Qty</th>
-                              <th className="py-2 text-right">Price</th>
-                              <th className="py-2 text-right">Total</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr>
-                              <td className="py-2">Sample Product</td>
-                              <td className="py-2">2</td>
-                              <td className="py-2 text-right">₹500</td>
-                              <td className="py-2 text-right">₹1,000</td>
-                            </tr>
-                          </tbody>
-                        </table>
-                        <div className="flex justify-between font-bold mt-4">
-                          <span>Grand Total:</span>
-                          <span>₹1,000.00</span>
-                        </div>
-                        <hr className="border-t border-black my-4 border-dashed" />
-                        <div className="text-center text-sm">
-                          <p>Thank you for your business!</p>
-                        </div>
-                      </div>
-                    </div>
-                  </DialogContent>
-                </Dialog>
               </div>
 
               <input
