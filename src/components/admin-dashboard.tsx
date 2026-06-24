@@ -55,6 +55,18 @@ interface ClientRow {
   next_billing_date: string;
 }
 
+interface BillRow {
+  id: string;
+  bill_number: string;
+  customer_name: string;
+  customer_phone: string;
+  items: unknown[];
+  total: number;
+  whatsapp_sent: boolean;
+  created_at: string;
+  bill_date: string;
+}
+
 interface DayData {
   day: string;
   bills: number;
@@ -85,6 +97,11 @@ function formatDateTime(dateStr: string): string {
     minute: "2-digit",
     hour12: true,
   });
+}
+
+function getTodayDateStr(): string {
+  const today = new Date();
+  return today.toISOString().split("T")[0];
 }
 
 function getWeekDates(): { start: string; end: string; days: string[] } {
@@ -119,14 +136,17 @@ export function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [newClientName, setNewClientName] = useState("");
 
-  // Global summary
-  const [globalBills, setGlobalBills] = useState(0);
-  const [globalRevenue, setGlobalRevenue] = useState(0);
-  const [globalWhatsApp, setGlobalWhatsApp] = useState(0);
-  const [globalCustomers, setGlobalCustomers] = useState(0);
+  // Today's summary
+  const [todayBills, setTodayBills] = useState(0);
+  const [todayRevenue, setTodayRevenue] = useState(0);
+  const [todayWhatsApp, setTodayWhatsApp] = useState(0);
+  const [todayCustomers, setTodayCustomers] = useState(0);
 
   // Week chart data
   const [weekData, setWeekData] = useState<DayData[]>([]);
+
+  // Recent bills (last 10)
+  const [recentBills, setRecentBills] = useState<BillRow[]>([]);
 
   const loadAdminData = useCallback(async () => {
     setLoading(true);
@@ -134,20 +154,35 @@ export function AdminDashboard() {
       const [keysRes, clientsRes, { data: billsData }] = await Promise.all([
         fetch("/api/admin/license-keys").then((r) => r.json()),
         fetch("/api/admin/clients").then((r) => r.json()),
-        supabase.from("bills").select("total, whatsapp_sent, created_at, customer_phone"),
+        supabase
+          .from("bills")
+          .select("id, bill_number, customer_name, customer_phone, items, total, whatsapp_sent, created_at, bill_date")
+          .order("created_at", { ascending: false }),
       ]);
 
       if (keysRes?.keys) setKeys(keysRes.keys);
       if (clientsRes?.clients) setClients(clientsRes.clients);
 
       if (billsData) {
-        setGlobalBills(billsData.length);
-        setGlobalRevenue(
-          billsData.reduce((sum, b) => sum + (Number(b.total) || 0), 0)
+        // Recent bills (last 10)
+        setRecentBills(billsData.slice(0, 10) as BillRow[]);
+
+        // Today's summary
+        const todayStr = getTodayDateStr();
+        const todaysBills = billsData.filter((b) => {
+          if (!b.created_at) return false;
+          return b.created_at.split("T")[0] === todayStr;
+        });
+
+        setTodayBills(todaysBills.length);
+        setTodayRevenue(
+          todaysBills.reduce((sum, b) => sum + (Number(b.total) || 0), 0)
         );
-        setGlobalWhatsApp(billsData.filter((b) => b.whatsapp_sent).length);
-        const uniquePhones = new Set(billsData.map((b) => b.customer_phone).filter(Boolean));
-        setGlobalCustomers(uniquePhones.size);
+        setTodayWhatsApp(todaysBills.filter((b) => b.whatsapp_sent).length);
+        const uniquePhones = new Set(
+          todaysBills.map((b) => b.customer_phone).filter(Boolean)
+        );
+        setTodayCustomers(uniquePhones.size);
 
         // Calculate week data
         const week = getWeekDates();
@@ -276,6 +311,7 @@ export function AdminDashboard() {
 
   return (
     <div className="space-y-6">
+      {/* ── Today's Summary Cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-6">
@@ -298,8 +334,8 @@ export function AdminDashboard() {
                 </svg>
               </div>
               <div>
-                <p className="text-2xl font-bold">{globalBills}</p>
-                <p className="text-xs text-muted-foreground">Global Total Bills</p>
+                <p className="text-2xl font-bold">{todayBills}</p>
+                <p className="text-xs text-muted-foreground">Bills Today</p>
               </div>
             </div>
           </CardContent>
@@ -327,9 +363,9 @@ export function AdminDashboard() {
               </div>
               <div>
                 <p className="text-2xl font-bold font-mono">
-                  {formatCurrency(globalRevenue)}
+                  {formatCurrency(todayRevenue)}
                 </p>
-                <p className="text-xs text-muted-foreground">Global Revenue</p>
+                <p className="text-xs text-muted-foreground">Revenue Today</p>
               </div>
             </div>
           </CardContent>
@@ -351,8 +387,10 @@ export function AdminDashboard() {
                 </svg>
               </div>
               <div>
-                <p className="text-2xl font-bold">{globalWhatsApp}</p>
-                <p className="text-xs text-muted-foreground">Global WhatsApps</p>
+                <p className="text-2xl font-bold">{todayWhatsApp}</p>
+                <p className="text-xs text-muted-foreground">
+                  WhatsApps Today
+                </p>
               </div>
             </div>
           </CardContent>
@@ -381,9 +419,9 @@ export function AdminDashboard() {
                 </svg>
               </div>
               <div>
-                <p className="text-2xl font-bold">{globalCustomers}</p>
+                <p className="text-2xl font-bold">{todayCustomers}</p>
                 <p className="text-xs text-muted-foreground">
-                  Global Customers
+                  Customers Today
                 </p>
               </div>
             </div>
@@ -391,11 +429,73 @@ export function AdminDashboard() {
         </Card>
       </div>
 
+      {/* ── Quick Actions ── */}
+      <div className="flex flex-wrap gap-3">
+        <Button onClick={() => router.push("/")} variant="default">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="mr-2"
+          >
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+            <path d="M14 2v6h6" />
+            <path d="M12 18v-6" />
+            <path d="M9 15h6" />
+          </svg>
+          Go to Billing
+        </Button>
+        <Button onClick={() => router.push("/history")} variant="outline">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="mr-2"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
+          View All History
+        </Button>
+        <Button onClick={() => router.push("/settings")} variant="outline">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="mr-2"
+          >
+            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          Settings
+        </Button>
+      </div>
+
+      {/* ── This Week's Chart ── */}
       <Card>
         <CardHeader>
-          <CardTitle>This Week (Global)</CardTitle>
+          <CardTitle>This Week</CardTitle>
           <CardDescription>
-            Bills generated and revenue across all clients over the current week.
+            Bills generated and revenue across all clients over the current
+            week.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -487,12 +587,99 @@ export function AdminDashboard() {
         </CardContent>
       </Card>
 
+      {/* ── Recent Bills (Last 10) ── */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Recent Bills</CardTitle>
+              <CardDescription>
+                Last 10 bills generated across all clients.
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push("/history")}
+            >
+              View All
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Bill #</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead className="text-center">Items</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-center">WhatsApp</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {recentBills.map((bill) => (
+                  <TableRow key={bill.id}>
+                    <TableCell className="font-mono text-sm">
+                      {bill.bill_number || "-"}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {formatDateTime(bill.created_at)}
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      {bill.customer_name}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {bill.customer_phone}
+                    </TableCell>
+                    <TableCell className="text-center text-sm">
+                      {Array.isArray(bill.items) ? bill.items.length : "-"}
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-medium">
+                      {formatCurrency(Number(bill.total) || 0)}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {bill.whatsapp_sent ? (
+                        <Badge
+                          variant="secondary"
+                          className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
+                        >
+                          Sent
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary">Pending</Badge>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {recentBills.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={7}
+                      className="text-center py-6 text-muted-foreground"
+                    >
+                      No bills generated yet.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── License Keys ── */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>License Keys</CardTitle>
-              <CardDescription>Manage license keys for new clients.</CardDescription>
+              <CardDescription>
+                Manage license keys for new clients.
+              </CardDescription>
             </div>
             <div className="flex items-center gap-2">
               <Input
@@ -521,14 +708,26 @@ export function AdminDashboard() {
               <TableBody>
                 {keys.map((k) => (
                   <TableRow key={k.id}>
-                    <TableCell className="font-mono text-sm">{k.license_key}</TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {k.license_key}
+                    </TableCell>
                     <TableCell>{k.client_name || "-"}</TableCell>
                     <TableCell>{k.username || "-"}</TableCell>
                     <TableCell>
                       <Badge
-                        variant={!k.is_active ? "destructive" : k.is_used ? "secondary" : "default"}
+                        variant={
+                          !k.is_active
+                            ? "destructive"
+                            : k.is_used
+                              ? "secondary"
+                              : "default"
+                        }
                       >
-                        {!k.is_active ? "Revoked" : k.is_used ? "Used" : "Active"}
+                        {!k.is_active
+                          ? "Revoked"
+                          : k.is_used
+                            ? "Used"
+                            : "Active"}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
@@ -554,7 +753,10 @@ export function AdminDashboard() {
                 ))}
                 {keys.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
+                    <TableCell
+                      colSpan={6}
+                      className="text-center py-4 text-muted-foreground"
+                    >
                       No license keys generated yet.
                     </TableCell>
                   </TableRow>
@@ -565,10 +767,13 @@ export function AdminDashboard() {
         </CardContent>
       </Card>
 
+      {/* ── Registered Clients ── */}
       <Card>
         <CardHeader>
           <CardTitle>Registered Clients</CardTitle>
-          <CardDescription>View all registered clients using the system.</CardDescription>
+          <CardDescription>
+            View all registered clients using the system.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="rounded-md border">
@@ -585,10 +790,13 @@ export function AdminDashboard() {
               </TableHeader>
               <TableBody>
                 {clients.map((c) => {
-                  const isOverdue = new Date(c.next_billing_date) < new Date();
+                  const isOverdue =
+                    new Date(c.next_billing_date) < new Date();
                   return (
                     <TableRow key={c.id}>
-                      <TableCell className="font-medium">{c.shop_name}</TableCell>
+                      <TableCell className="font-medium">
+                        {c.shop_name}
+                      </TableCell>
                       <TableCell>{c.username}</TableCell>
                       <TableCell>{c.owner_phone}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">
@@ -598,7 +806,9 @@ export function AdminDashboard() {
                         {isOverdue ? (
                           <div className="flex items-center gap-2 text-destructive">
                             <span className="flex h-2 w-2 rounded-full bg-destructive animate-pulse" />
-                            <span className="text-sm font-medium">Overdue</span>
+                            <span className="text-sm font-medium">
+                              Overdue
+                            </span>
                           </div>
                         ) : (
                           <span className="text-sm text-muted-foreground">
@@ -633,7 +843,10 @@ export function AdminDashboard() {
                 })}
                 {clients.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">
+                    <TableCell
+                      colSpan={6}
+                      className="text-center py-4 text-muted-foreground"
+                    >
                       No clients registered yet.
                     </TableCell>
                   </TableRow>
