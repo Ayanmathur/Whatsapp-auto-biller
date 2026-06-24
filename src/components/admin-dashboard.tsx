@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -112,6 +113,8 @@ export function AdminDashboard() {
   const supabase = createClient();
 
   const [keys, setKeys] = useState<LicenseKey[]>([]);
+
+  const router = useRouter();
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [newClientName, setNewClientName] = useState("");
@@ -617,7 +620,10 @@ export function AdminDashboard() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => window.location.href = `/admin/client/${c.id}`}
+                          onClick={() => {
+                            router.push(`/admin/client/${c.id}`);
+                            router.refresh();
+                          }}
                         >
                           Manage
                         </Button>

@@ -81,7 +81,7 @@ function NavContent() {
   }, [supabase]);
 
   const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
+    await supabase.auth.signOut();
     router.push("/login");
     router.refresh();
   };

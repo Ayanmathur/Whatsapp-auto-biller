@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { sendWhatsappMessage } from "@/lib/sendWhatsapp";
+
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 
@@ -39,7 +39,6 @@ export function HistoryClient({ clientId }: { clientId?: string }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [dateRange, setDateRange] = useState("all");
   const [cachedSettings, setCachedSettings] = useState<Record<string, unknown> | null>(null);
-  const [sendingWaId, setSendingWaId] = useState<string | null>(null);
   const pathname = usePathname();
 
   const fetchBills = useCallback(async () => {
@@ -61,6 +60,11 @@ export function HistoryClient({ clientId }: { clientId?: string }) {
       }
 
       if (!shopId) return;
+
+      const { data: dbSettings } = await supabase.from("clients").select("*").eq("id", shopId).single();
+      if (dbSettings) {
+        setCachedSettings(dbSettings);
+      }
 
       let query = supabase
         .from("bills")
@@ -156,110 +160,26 @@ export function HistoryClient({ clientId }: { clientId?: string }) {
     XLSX.writeFile(wb, `Customers_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  const handleSendWhatsapp = async (bill: Bill) => {
+  // Not async — open tab instantly on click
+  function handleWhatsappFromHistory(bill: Bill) {
     if (!bill.customer_phone) {
       toast.error("No phone number for this customer.");
       return;
     }
+    const cleanPhone = bill.customer_phone.replace(/\D/g, '').slice(-10);
+    const template = (cachedSettings?.whatsapp_message_template as string) || 
+      'Dear {customer_name}, thank you for visiting {shop_name}! We appreciate your business. See you again! 🙏';
+      
+    const message = template
+      .replace(/\{customer_name\}/g, bill.customer_name || 'Customer')
+      .replace(/\{shop_name\}/g, (cachedSettings?.shop_name as string) || '');
 
-    setSendingWaId(bill.id);
-
-    try {
-      let settings = cachedSettings;
-      if (!settings) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error("Not authenticated");
-
-        let shopId = clientId;
-        if (!shopId) {
-          const { data: clientData } = await supabase.from("clients").select("id").eq("user_id", user.id).single();
-          if (clientData) shopId = clientData.id;
-        }
-
-        if (shopId) {
-          const { data: dbSettings } = await supabase.from("clients").select("*").eq("id", shopId).single();
-          settings = dbSettings;
-          setCachedSettings(dbSettings);
-        }
-      }
-
-      if (!settings) throw new Error("Could not load shop settings");
-
-      toast("Preparing WhatsApp message...");
-      const result = await sendWhatsappMessage({
-        bill: {
-          id: bill.id,
-          customer_name: bill.customer_name || "Customer",
-          customer_phone: bill.customer_phone,
-        },
-        clientSettings: {
-          whatsapp_automation_enabled: Boolean(settings.whatsapp_automation_enabled),
-          whatsapp_api_token: settings.whatsapp_api_token ? String(settings.whatsapp_api_token) : null,
-          whatsapp_phone_number_id: settings.whatsapp_phone_number_id ? String(settings.whatsapp_phone_number_id) : null,
-          whatsapp_message_template: settings.whatsapp_message_template ? String(settings.whatsapp_message_template) : "",
-          shop_name: settings.shop_name ? String(settings.shop_name) : "",
-        }
-      });
-
-      if (result.success) {
-        if (result.mode === "auto") {
-          toast.success(`✅ WhatsApp sent to ${bill.customer_name} automatically!`);
-          
-          // Instantly update the row locally
-          setBills((prev) =>
-            prev.map((b) =>
-              b.id === bill.id ? { ...b, whatsapp_sent: true, whatsapp_sent_at: new Date().toISOString() } : b
-            )
-          );
-
-          // Update backend silently
-          await supabase.from("bills").update({ whatsapp_sent: true, whatsapp_sent_at: new Date().toISOString() }).eq("id", bill.id);
-        } else {
-          toast.success(`📱 WhatsApp Web opened — send the message to ${bill.customer_name}`);
-          // Do not update the row locally because it's manual mode
-          if (result.popupBlocked && result.url) {
-            toast.error("Popup blocked! Click here to open WhatsApp", {
-              action: { label: "Open WhatsApp", onClick: () => window.open(result.url, "_blank") }
-            });
-          }
-        }
-      } else {
-        toast.error(`Auto-send failed. Trying WhatsApp Web...`);
-        // Fallback manually
-        let finalMessage = (settings.whatsapp_message_template as string) || `Dear {customer_name}, thank you for your purchase from {shop_name}!`;
-        finalMessage = finalMessage.replace(/\{customer_name\}/g, bill.customer_name || "Customer");
-        finalMessage = finalMessage.replace(/\{shop_name\}/g, (settings.shop_name as string) || "");
-        
-        let formattedPhone = bill.customer_phone.replace(/[\s\-\(\)]/g, "");
-        if (formattedPhone.startsWith("0")) formattedPhone = "91" + formattedPhone.substring(1);
-        else if (formattedPhone.startsWith("+91")) formattedPhone = formattedPhone.substring(1);
-        else if (formattedPhone.length === 10) formattedPhone = "91" + formattedPhone;
-
-        const encodedMessage = encodeURIComponent(finalMessage);
-        const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodedMessage}`;
-        
-        let opened = false;
-        try {
-          const popup = window.open(whatsappUrl, "_blank");
-          if (popup) opened = true;
-        } catch {}
-
-        if (opened) {
-          toast.success(`📱 WhatsApp Web opened — send the message to ${bill.customer_name}`);
-        } else {
-          toast.error("Popup blocked! Click here to open WhatsApp", {
-            action: { label: "Open WhatsApp", onClick: () => window.open(whatsappUrl, "_blank") }
-          });
-        }
-      }
-
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to prepare WhatsApp message.");
-    } finally {
-      setSendingWaId(null);
+    const url = 'https://wa.me/91' + cleanPhone + '?text=' + encodeURIComponent(message);
+    const newTab = window.open(url, '_blank');
+    if (!newTab) {
+      toast.error("Popup blocked! Please allow popups to open WhatsApp Web.");
     }
-  };
+  }
 
   return (
     <div className="space-y-6">
@@ -344,19 +264,14 @@ export function HistoryClient({ clientId }: { clientId?: string }) {
                       <TableCell className="text-right space-x-2">
                         {/* WhatsApp Action Button */}
                         <Button
+                          type="button"
                           variant="ghost"
                           size="sm"
-                          disabled={sendingWaId === b.id}
-                          onClick={() => handleSendWhatsapp(b)}
+                          onClick={() => handleWhatsappFromHistory(b)}
                           className={b.whatsapp_sent ? "text-emerald-500 opacity-70 hover:opacity-100 hover:text-emerald-600" : "text-slate-600 hover:text-emerald-600"}
                           title={b.whatsapp_sent && b.whatsapp_sent_at ? `Sent on ${new Date(b.whatsapp_sent_at).toLocaleString()}` : "Send WhatsApp"}
                         >
-                          {sendingWaId === b.id ? (
-                            <svg className="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                            </svg>
-                          ) : b.whatsapp_sent ? (
+                          {b.whatsapp_sent ? (
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
                           ) : (
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
