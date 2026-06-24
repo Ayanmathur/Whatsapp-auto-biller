@@ -625,24 +625,54 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
         </div>
       `
 
-      // Inject into print area
-      const printArea = document.getElementById('print-area')
-      if (printArea) {
-        printArea.innerHTML = billHtml
-        printArea.style.display = 'block'
+      // Remove any previous print container if exists
+      const existing = document.getElementById('bill-print-root')
+      if (existing) existing.remove()
 
-        // Trigger print
+      // Create container appended directly to body
+      // This sits OUTSIDE Next.js root div
+      const container = document.createElement('div')
+      container.id = 'bill-print-root'
+      container.innerHTML = billHtml
+      document.body.appendChild(container)
+
+      // Add a style tag that hides everything except our container
+      const styleTag = document.createElement('style')
+      styleTag.id = 'bill-print-style'
+      styleTag.innerHTML = `
+        @media print {
+          body > *:not(#bill-print-root) {
+            display: none !important;
+            visibility: hidden !important;
+          }
+          #bill-print-root {
+            display: block !important;
+            visibility: visible !important;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            background: white !important;
+            z-index: 999999 !important;
+          }
+          @page { margin: 0; size: A4 portrait; }
+        }
+      `
+      document.head.appendChild(styleTag)
+
+      // Small delay to let DOM update before print dialog
+      setTimeout(() => {
         window.print()
 
-        // After print dialog closes, restore (use onafterprint event)
+        // Cleanup after print dialog closes
         window.onafterprint = () => {
-          printArea.innerHTML = ''
-          printArea.style.display = 'none'
+          const c = document.getElementById('bill-print-root')
+          const s = document.getElementById('bill-print-style')
+          if (c) c.remove()
+          if (s) s.remove()
           window.onafterprint = null
         }
-      } else {
-        toast.error("Print area not found");
-      }
+      }, 100)
     } catch (err) {
       console.error(err);
       toast.error("Failed to save and print.");
@@ -1172,8 +1202,6 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
         </Button>
       </div>
 
-      {/* Hidden print area — only visible when printing */}
-      <div id="print-area" style={{ display: 'none' }} />
     </div>
   );
 }
