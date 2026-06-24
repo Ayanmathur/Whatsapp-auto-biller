@@ -1205,7 +1205,6 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
           Save only
         </Button>
       </div>
-      </div>
     </div>
   );
 }

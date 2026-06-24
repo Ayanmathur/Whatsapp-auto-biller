@@ -133,15 +133,15 @@ export default function BillPreviewPage() {
     .sort((a, b) => a.rate - b.rate);
 
   // Formatting helpers
-  const formatCurrency = (amt: number) => \`₹\${amt.toFixed(2)}\`;
+  const formatCurrency = (amt: number) => `₹${amt.toFixed(2)}`;
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
-    return \`\${String(d.getDate()).padStart(2, '0')}/\${String(d.getMonth() + 1).padStart(2, '0')}/\${d.getFullYear()}\`;
+    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
   };
 
   return (
     <>
-      <style dangerouslySetInnerHTML={{ __html: \`
+      <style dangerouslySetInnerHTML={{ __html: `
         :root {
           --bg-color: #f3f4f6;
         }
@@ -293,7 +293,7 @@ export default function BillPreviewPage() {
             display: none;
           }
         }
-      \`} } />
+      ` }} />
 
       <button className="print-btn" onClick={() => window.print()}>
         <span role="img" aria-label="print">🖨️</span> Print Bill
@@ -318,47 +318,47 @@ export default function BillPreviewPage() {
               />
             )}
             <div>
-              <div className={\`font-bold \${isThermal ? 'text-lg' : 'text-2xl'}\`}>
+              <div className={`font-bold \${isThermal ? 'text-lg' : 'text-2xl'}`}>
                 {shop.shop_name}
               </div>
-              <div className={\`text-gray-600 mt-1 \${isThermal ? 'text-xs' : 'text-sm'}\`}>
+              <div className={`text-gray-600 mt-1 \${isThermal ? 'text-xs' : 'text-sm'}`}>
                 {shop.shop_address}
               </div>
-              <div className={\`text-gray-600 mt-1 \${isThermal ? 'text-xs' : 'text-sm'}\`}>
+              <div className={`text-gray-600 mt-1 \${isThermal ? 'text-xs' : 'text-sm'}`}>
                 <span className="font-semibold">GSTIN:</span> {shop.gst_number}
               </div>
             </div>
           </div>
           <div className="text-right">
-            <div className={\`font-bold text-gray-800 \${isThermal ? 'text-sm' : 'text-xl'}\`}>
+            <div className={`font-bold text-gray-800 \${isThermal ? 'text-sm' : 'text-xl'}`}>
               INVOICE
             </div>
-            <div className={\`mt-1 \${isThermal ? 'text-xs' : 'text-sm'}\`}>
+            <div className={`mt-1 \${isThermal ? 'text-xs' : 'text-sm'}`}>
               <span className="text-gray-500">Bill No:</span> <span className="font-medium">{bill.bill_number}</span>
             </div>
-            <div className={\`\${isThermal ? 'text-xs' : 'text-sm'}\`}>
+            <div className={`\${isThermal ? 'text-xs' : 'text-sm'}`}>
               <span className="text-gray-500">Date:</span> <span className="font-medium">{formatDate(bill.bill_date)}</span>
             </div>
           </div>
         </div>
 
-        <div className={\`border-b \${isThermal ? 'border-dashed border-gray-400' : 'border-2 border-gray-800'} mb-4\`}></div>
+        <div className={`border-b \${isThermal ? 'border-dashed border-gray-400' : 'border-2 border-gray-800'} mb-4`}></div>
 
         {/* CUSTOMER SECTION */}
         <div className="mb-6">
-          <div className={\`text-gray-500 font-semibold mb-1 \${isThermal ? 'text-xs' : 'text-sm'}\`}>
+          <div className={`text-gray-500 font-semibold mb-1 \${isThermal ? 'text-xs' : 'text-sm'}`}>
             Bill To:
           </div>
-          <div className={\`font-bold \${isThermal ? 'text-sm' : 'text-lg'}\`}>
+          <div className={`font-bold \${isThermal ? 'text-sm' : 'text-lg'}`}>
             {bill.customer_name}
           </div>
-          <div className={\`text-gray-600 \${isThermal ? 'text-xs' : 'text-sm'}\`}>
+          <div className={`text-gray-600 \${isThermal ? 'text-xs' : 'text-sm'}`}>
             Phone: +91 {bill.customer_phone}
           </div>
         </div>
 
         {/* ITEMS TABLE */}
-        <table className={\`w-full \${isThermal ? 'thermal-table' : 'zebra-table'}\`}>
+        <table className={`w-full \${isThermal ? 'thermal-table' : 'zebra-table'}`}>
           <thead>
             <tr>
               {!isThermal && <th>#</th>}
@@ -384,10 +384,10 @@ export default function BillPreviewPage() {
         </table>
 
         {/* BOTTOM SECTION: GST SUMMARY AND TOTALS */}
-        <div className={\`flex \${isThermal ? 'flex-col' : 'justify-between'} mt-6\`}>
+        <div className={`flex \${isThermal ? 'flex-col' : 'justify-between'} mt-6`}>
           
           {/* GST SUMMARY TABLE (Hidden on thermal to save space) */}
-          <div className={\`\${isThermal ? 'hidden' : 'w-1/2 pr-8'}\`}>
+          <div className={`\${isThermal ? 'hidden' : 'w-1/2 pr-8'}`}>
             {gstSlabs.length > 0 && (
               <>
                 <div className="text-sm font-semibold text-gray-500 mb-2">GST Summary</div>
@@ -414,7 +414,7 @@ export default function BillPreviewPage() {
           </div>
 
           {/* TOTALS */}
-          <div className={\`\${isThermal ? 'w-full mt-4' : 'w-1/3'}\`}>
+          <div className={`\${isThermal ? 'w-full mt-4' : 'w-1/3'}`}>
             <div className="flex justify-between py-1 text-gray-600">
               <span>Subtotal</span>
               <span>{formatCurrency(bill.subtotal)}</span>
@@ -433,7 +433,7 @@ export default function BillPreviewPage() {
               <span>{formatCurrency(bill.gst_amount)}</span>
             </div>
             
-            <div className={\`flex justify-between py-3 font-bold \${isThermal ? 'text-base' : 'text-xl'}\`}>
+            <div className={`flex justify-between py-3 font-bold \${isThermal ? 'text-base' : 'text-xl'}`}>
               <span>GRAND TOTAL</span>
               <span>{formatCurrency(bill.total)}</span>
             </div>
