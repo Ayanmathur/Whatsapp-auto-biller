@@ -25,7 +25,7 @@ export function middleware(request: NextRequest) {
 
   if (isAuthenticated && isLoginPage) {
     const url = request.nextUrl.clone()
-    url.pathname = '/'
+    url.pathname = '/admin'
     return NextResponse.redirect(url)
   }
 

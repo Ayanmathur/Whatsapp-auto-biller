@@ -3,8 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 
 function isAdmin(request: NextRequest): boolean {
   const secret = process.env.ADMIN_SESSION_SECRET || 'default_admin_session_secret_change_me'
-  const cookie = request.cookies.get('admin_session')?.value
-  return cookie === secret || cookie === 'authenticated'
+  return request.cookies.get('admin_session')?.value === secret
 }
 
 function generateKey(): string {
