@@ -46,6 +46,12 @@ export interface Database {
           whatsapp_api_url: string | null
           whatsapp_api_key: string | null
           whatsapp_instance_id: string | null
+          user_id: string
+          whatsapp_enabled: boolean
+          default_gst: number
+          whatsapp_provider: string | null
+          whatsapp_webhook_url: string | null
+          whatsapp_webhook_payload: string | null
           products: ProductEntry[]
           created_at: string
         }
@@ -61,6 +67,12 @@ export interface Database {
           whatsapp_api_url?: string | null
           whatsapp_api_key?: string | null
           whatsapp_instance_id?: string | null
+          user_id?: string
+          whatsapp_enabled?: boolean
+          default_gst?: number
+          whatsapp_provider?: string | null
+          whatsapp_webhook_url?: string | null
+          whatsapp_webhook_payload?: string | null
           products?: ProductEntry[]
           created_at?: string
         }
@@ -76,6 +88,12 @@ export interface Database {
           whatsapp_api_url?: string | null
           whatsapp_api_key?: string | null
           whatsapp_instance_id?: string | null
+          user_id?: string
+          whatsapp_enabled?: boolean
+          default_gst?: number
+          whatsapp_provider?: string | null
+          whatsapp_webhook_url?: string | null
+          whatsapp_webhook_payload?: string | null
           products?: ProductEntry[]
           created_at?: string
         }

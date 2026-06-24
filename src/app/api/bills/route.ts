@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
         .from("bills")
         .select("*")
         .eq("id", billId)
+        .eq("client_id", clientId)
         .single();
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -57,11 +58,13 @@ export async function GET(request: NextRequest) {
 
     if (action === "count") {
       const billDate = searchParams.get("billDate");
+      if (!billDate) return NextResponse.json({ count: 0 });
+
       const { count, error } = await adminSupabase
         .from("bills")
         .select("id", { count: "exact", head: true })
         .eq("client_id", clientId)
-        .eq("bill_date", billDate || "");
+        .eq("bill_date", billDate);
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       return NextResponse.json({ count: count || 0 });

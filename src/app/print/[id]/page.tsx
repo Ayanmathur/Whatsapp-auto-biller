@@ -29,31 +29,33 @@ export default async function PrintPage({ params }: { params: { id: string } }) 
   const shop = bill.clients;
 
   // Calculate GST slabs to pass to PrintBillData
-  const items = Array.isArray(bill.items) ? bill.items : [];
+  const rawItems = Array.isArray(bill.items) ? bill.items : [];
+  const items = rawItems.map((item: Record<string, unknown>) => ({
+    name: String(item.name || ''),
+    qty: Number(item.qty) || 0,
+    price: Number(item.price) || 0,
+    gst_percent: Number(item.gst_percent) || 0,
+  }));
   let subtotal = 0;
   let totalGST = 0;
   const slabsMap: Record<number, { taxableAmount: number; cgst: number; sgst: number; totalTax: number }> = {};
 
-  items.forEach((item: Record<string, unknown>) => {
-    const qty = Number(item.qty) || 0;
-    const price = Number(item.price) || 0;
-    const gstPercent = Number(item.gst_percent) || 0;
+  items.forEach((item: { qty: number; price: number; gst_percent: number }) => {
     
-    const lineAmount = qty * price;
+    const lineAmount = item.qty * item.price;
     subtotal += lineAmount;
 
-    if (gstPercent > 0) {
-      const taxForLine = lineAmount * (gstPercent / 100);
-      const halfTax = taxForLine / 2;
+    if (item.gst_percent > 0 && lineAmount > 0) {
+      const taxAmount = (lineAmount * item.gst_percent) / 100;
+      totalGST += taxAmount;
 
-      if (!slabsMap[gstPercent]) {
-        slabsMap[gstPercent] = { taxableAmount: 0, cgst: 0, sgst: 0, totalTax: 0 };
+      if (!slabsMap[item.gst_percent]) {
+        slabsMap[item.gst_percent] = { taxableAmount: 0, cgst: 0, sgst: 0, totalTax: 0 };
       }
-      slabsMap[gstPercent].taxableAmount += lineAmount;
-      slabsMap[gstPercent].cgst += halfTax;
-      slabsMap[gstPercent].sgst += halfTax;
-      slabsMap[gstPercent].totalTax += taxForLine;
-      totalGST += taxForLine;
+      slabsMap[item.gst_percent].taxableAmount += lineAmount;
+      slabsMap[item.gst_percent].totalTax += taxAmount;
+      slabsMap[item.gst_percent].cgst += taxAmount / 2;
+      slabsMap[item.gst_percent].sgst += taxAmount / 2;
     }
   });
 

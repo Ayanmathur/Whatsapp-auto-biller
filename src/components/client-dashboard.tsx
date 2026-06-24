@@ -51,7 +51,7 @@ export function ClientDashboard({ clientId }: { clientId?: string }) {
           const { data: clientData } = await supabase
             .from("clients")
             .select("id")
-            .eq("auth_id", userData.user.id)
+            .eq("user_id", userData.user.id)
             .single();
           if (clientData) {
             shopId = clientData.id;
@@ -61,7 +61,7 @@ export function ClientDashboard({ clientId }: { clientId?: string }) {
 
       if (shopId) {
         const { data: config } = await supabase
-          .from("app_config")
+          .from("clients")
           .select("id, whatsapp_enabled, whatsapp_message_template, shop_name")
           .eq("id", shopId)
           .single();

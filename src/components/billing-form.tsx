@@ -134,7 +134,10 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       if (json.data) {
         const shopData = json.data as ShopInfo;
         setShop(shopData);
-        setItems(prev => [{ ...prev[0], gst_percent: shopData.default_gst || 0 }]);
+        setItems(prev => prev.map(item => ({
+          ...item,
+          gst_percent: item.gst_percent === 0 ? (shopData.default_gst || 0) : item.gst_percent
+        })));
       }
     } catch (err) {
       console.error("Failed to load shop info:", err);

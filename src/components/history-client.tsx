@@ -49,7 +49,7 @@ export function HistoryClient({ clientId }: { clientId?: string }) {
         const { data: clientData } = await supabase
           .from("clients")
           .select("id")
-          .eq("auth_id", user.id)
+          .eq("user_id", user.id)
           .single();
         if (clientData) {
           shopId = clientData.id;
