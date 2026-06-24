@@ -300,18 +300,16 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
   }, [items]);
 
   // ── Save bill ─────────────────────────────────────────────────
-  async function handleSave(action: "print_and_send" | "send" | "print" | "save") {
+  async function handleSave(action: "send" | "print" | "save") {
     // Validation
     if (!shop) {
       toast.error("Business settings not loaded. Configure your business in Settings first.");
       return;
     }
-    if (!customerName.trim()) {
-      toast.error("Customer name is required.");
-      return;
-    }
-    if (customerPhone.length !== 10) {
-      toast.error("Please enter a valid 10-digit phone number.");
+
+    // For Send, phone is required. For Print/Save, name is enough.
+    if (action === "send" && customerPhone.length !== 10) {
+      toast.error("Please enter a valid 10-digit phone number to send WhatsApp.");
       return;
     }
 
@@ -335,6 +333,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
         subtotal: calculations.subtotal,
         gst_amount: calculations.totalGST,
         total: calculations.grandTotal,
+        whatsapp_sent: action === "send",
         whatsapp_sent_at: (action === "send") && shop.whatsapp_enabled ? new Date().toISOString() : null,
       };
 
@@ -349,24 +348,22 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
         dbError = res.error;
       }
 
-      if (dbError) throw dbError;
+      if (dbError) {
+        console.error("Supabase DB error:", JSON.stringify(dbError));
+        throw new Error(dbError.message || "Database error");
+      }
 
-      const isPrint = action === "print";
-      const isSend = action === "send";
       const billId = dbData?.[0]?.id || billPayload.bill_number;
 
-      if (isPrint) {
+      if (action === "print") {
         toast.success("Bill saved! Opening print preview...");
-        
-        // Open the dedicated print page
         window.open(`/print/${billId}`, "_blank");
       }
 
-      if (isSend) {
-        const message = shop.whatsapp_message_template.replace(
-          /\{customer_name\}/g,
-          customerName.trim()
-        );
+      if (action === "send") {
+        const message = shop.whatsapp_message_template
+          ? shop.whatsapp_message_template.replace(/\{customer_name\}/g, customerName.trim())
+          : `Dear ${customerName.trim()}, thank you for your purchase!`;
 
         if (shop.whatsapp_enabled) {
           toast("Sending WhatsApp message...");
@@ -377,25 +374,27 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
               body: JSON.stringify({
                 phone: customerPhone,
                 message,
-                billId: dbData?.[0]?.id || billPayload.bill_number,
+                billId,
                 clientId: shop.id
               }),
             });
-            if (!waRes.ok) throw new Error("Failed to send WhatsApp");
+            if (!waRes.ok) throw new Error("API failed");
             toast.success("WhatsApp sent automatically!");
           } catch {
-            toast("Opening WhatsApp manually...");
+            // Automation failed, fall back to manual
             const waUrl = `https://wa.me/91${customerPhone}?text=${encodeURIComponent(message)}`;
             window.open(waUrl, "_blank");
+            toast.success("Bill saved! WhatsApp opened in new tab.");
           }
         } else {
-          toast.success(isPrint ? "Opening WhatsApp manually..." : "Bill saved! Opening WhatsApp manually...");
+          // Manual mode: open wa.me
           const waUrl = `https://wa.me/91${customerPhone}?text=${encodeURIComponent(message)}`;
           window.open(waUrl, "_blank");
+          toast.success("Bill saved! WhatsApp opened in new tab.");
         }
-      } 
+      }
       
-      if (!isPrint && !isSend) {
+      if (action === "save") {
         toast.success("Bill saved successfully!");
       }
     } catch (err: unknown) {
