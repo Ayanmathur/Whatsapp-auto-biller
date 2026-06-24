@@ -482,6 +482,13 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       return
     }
 
+    // OPEN TAB IMMEDIATELY on click to prevent popup block
+    const newTab = window.open('about:blank', '_blank');
+    if (!newTab) {
+      alert('Popup blocked. Please allow popups for this site and try again.');
+      return; // Stop if we can't open a tab
+    }
+
     setSaving("print");
     try {
       const supabase = createClient();
@@ -519,6 +526,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
         .single()
 
       if (error) {
+        if (newTab) newTab.close()
         alert('Save failed: ' + error.message)
         return
       }
@@ -546,12 +554,10 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       const encoded = encodeURIComponent(JSON.stringify(printData))
       const previewUrl = '/bill-preview?data=' + encoded
 
-      const tab = window.open(previewUrl, '_blank')
-      if (!tab) {
-        alert('Popup was blocked. Please allow popups for this site in browser settings, then try again.')
-      }
+      if (newTab) newTab.location.href = previewUrl;
     } catch (err) {
       console.error(err);
+      if (newTab) newTab.close()
       toast.error("Failed to save and print.");
     } finally {
       setSaving(null);
@@ -579,9 +585,6 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
 
     // 3. Build URL
     const waUrl = 'https://wa.me/91' + ten + '?text=' + encodeURIComponent(msg)
-
-    // 4. Show the URL in an alert first so we can verify it
-    alert('Opening: ' + waUrl)
 
     // 5. Open
     window.open(waUrl, '_blank')
