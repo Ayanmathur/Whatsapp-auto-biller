@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/admin'
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,14 +7,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Password required' }, { status: 400 })
     }
 
-    const supabase = createAdminClient()
-    const { data } = await supabase
-      .from('app_config')
-      .select('value')
-      .eq('key', 'admin_password')
-      .single()
-
-    if (!data || data.value !== password) {
+    const expectedPassword = process.env.ADMIN_PASSWORD || 'may@2002'
+    
+    if (password !== expectedPassword) {
       return NextResponse.json({ success: false, error: 'Invalid password' }, { status: 401 })
     }
 
