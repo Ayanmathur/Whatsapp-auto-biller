@@ -566,28 +566,30 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
 
   // ── Standalone WhatsApp Flow ──────────────────────────────────
   function openWhatsapp() {
-    // 1. Get phone — take exactly last 10 digits
     const raw = customerPhone.replace(/\D/g, '')
-    const ten = raw.length >= 10 ? raw.slice(-10) : raw
-    
+    const ten = raw.slice(-10)
+
     if (ten.length !== 10) {
-      alert('Phone number must be 10 digits. Currently: ' + ten)
+      alert('Phone number must be 10 digits. Got: ' + ten)
       return
     }
 
-    // 2. Build message
-    const template = shop?.whatsapp_message_template || 
+    const template = shop?.whatsapp_message_template ||
       'Dear {customer_name}, thank you for visiting!'
-    
+
     const msg = template
-      .replace(/\{customer_name\}/gi, customerName || 'Customer')
+      .replace(/\{customer_name\}/gi, customerName.trim() || 'Customer')
       .replace(/\{shop_name\}/gi, shop?.shop_name || '')
 
-    // 3. Build URL
     const waUrl = 'https://wa.me/91' + ten + '?text=' + encodeURIComponent(msg)
 
-    // 5. Open
-    window.open(waUrl, '_blank')
+    const a = document.createElement('a')
+    a.href = waUrl
+    a.target = '_blank'
+    a.rel = 'noopener noreferrer'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
   }
 
   // ── Reset form helper ─────────────────────────────────────────
