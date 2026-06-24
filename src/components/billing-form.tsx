@@ -328,11 +328,8 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
 
       // To bypass browser popup blockers, we must open the new tab synchronously before the async fetch
       let newWindow: Window | null = null;
-      if (action === "print" || (action === "send" && !shop.whatsapp_enabled)) {
-        newWindow = window.open("about:blank", "_blank");
-        if (newWindow) {
-           newWindow.document.write("<div style='font-family: sans-serif; padding: 20px;'>Processing request, please wait...</div>");
-        }
+      if (action === "print" || action === "send") {
+        newWindow = window.open("", "_blank");
       }
 
       // Use server API route (bypasses RLS with admin key)
@@ -379,6 +376,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
               }),
             });
             if (!waRes.ok) throw new Error("API failed");
+            if (newWindow) newWindow.close();
             toast.success("WhatsApp sent automatically!");
           } catch {
             // Automation failed, fall back to manual
