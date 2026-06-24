@@ -467,6 +467,111 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
     }
   }
 
+  // ── Print specific flow ─────────────────────────────────────────
+  async function saveBillAndPrint() {
+    if (!shop) {
+      toast.error("Business settings not loaded. Configure your business in Settings first.");
+      return;
+    }
+    if (!customerName.trim()) {
+      toast.error("Customer name is required.");
+      return;
+    }
+    const validItems = items.filter((i) => i.name.trim() && i.qty > 0 && i.price > 0);
+    if (validItems.length === 0) {
+      toast.error("Please add at least one valid item.");
+      return;
+    }
+
+    setSaving("print");
+
+    try {
+      // Step 2: Calculate totals
+      const subtotal = calculations.subtotal;
+      const gst_amount = calculations.totalGST;
+      const total = calculations.grandTotal;
+
+      // Step 3: Generate unique bill number just-in-time
+      const today = getTodayString();
+      const dateForQuery = `${today.slice(0, 4)}-${today.slice(4, 6)}-${today.slice(6, 8)}`;
+      let newBillNumber = billNumber; // Fallback
+
+      const params = new URLSearchParams({ action: "count", billDate: dateForQuery });
+      if (clientId) params.set("clientId", clientId);
+      const countRes = await fetch(`/api/bills?${params.toString()}`);
+      if (countRes.ok) {
+        const json = await countRes.json();
+        const seq = ((json.count ?? 0) + 1).toString().padStart(3, "0");
+        newBillNumber = `BILL-${today}-${seq}`;
+      }
+
+      // Step 4: Save to Supabase
+      const billPayload = {
+        client_id: shop.id,
+        customer_name: customerName.trim(),
+        customer_phone: customerPhone,
+        bill_number: newBillNumber,
+        bill_date: billDate,
+        items: validItems.map((i) => ({
+          name: i.name.trim(),
+          qty: i.qty,
+          price: i.price,
+          gst_percent: i.gst_percent,
+        })),
+        subtotal,
+        gst_amount,
+        total,
+        whatsapp_sent: false,
+        whatsapp_sent_at: null,
+      };
+
+      const saveRes = await fetch("/api/bills", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ billPayload }), // Do not use editBillId to guarantee a new row
+      });
+
+      const saveJson = await saveRes.json();
+      if (!saveRes.ok) {
+        toast.error("Failed to save bill. Try again.");
+        return;
+      }
+
+      const newBillId = saveJson.data?.[0]?.id || newBillNumber;
+
+      // Step 5: Open preview in new tab
+      const url = `/bill-preview/${newBillId}`;
+      let opened = false;
+      try {
+        const popup = window.open(url, "_blank");
+        if (popup) opened = true;
+      } catch {
+        // Ignore errors
+      }
+
+      if (opened) {
+        toast.success("Bill saved! Opening preview...");
+      } else {
+        toast.success("Bill saved! (Popup blocked)", {
+          action: { label: "Open Print", onClick: () => window.open(url, "_blank") }
+        });
+      }
+
+      // Step 6: Reset form
+      setCustomerName("");
+      setCustomerPhone("");
+      setItems([createEmptyItem(shop.default_gst || 0)]);
+      setSavedBillId(null);
+      generateBillNumber();
+
+    } catch (err) {
+      console.error("Print failed:", err);
+      toast.error("Failed to save bill. Try again.");
+    } finally {
+      setSaving(null);
+    }
+  }
+
   // ── Reset form helper ─────────────────────────────────────────
   function resetForm() {
     setCustomerName("");
