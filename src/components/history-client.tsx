@@ -193,11 +193,11 @@ export function HistoryClient({ clientId }: { clientId?: string }) {
           customer_phone: bill.customer_phone,
         },
         clientSettings: {
-          whatsapp_automation_enabled: settings.whatsapp_automation_enabled ?? false,
-          whatsapp_api_token: settings.whatsapp_api_token || null,
-          whatsapp_phone_number_id: settings.whatsapp_phone_number_id || null,
-          whatsapp_message_template: settings.whatsapp_message_template || "",
-          shop_name: settings.shop_name,
+          whatsapp_automation_enabled: Boolean(settings.whatsapp_automation_enabled),
+          whatsapp_api_token: settings.whatsapp_api_token ? String(settings.whatsapp_api_token) : null,
+          whatsapp_phone_number_id: settings.whatsapp_phone_number_id ? String(settings.whatsapp_phone_number_id) : null,
+          whatsapp_message_template: settings.whatsapp_message_template ? String(settings.whatsapp_message_template) : "",
+          shop_name: settings.shop_name ? String(settings.shop_name) : "",
         }
       });
 
@@ -226,9 +226,9 @@ export function HistoryClient({ clientId }: { clientId?: string }) {
       } else {
         toast.error(`Auto-send failed. Trying WhatsApp Web...`);
         // Fallback manually
-        let finalMessage = settings.whatsapp_message_template || `Dear {customer_name}, thank you for your purchase from {shop_name}!`;
-        finalMessage = finalMessage.replace(/\{customer_name\}/g, bill.customer_name);
-        finalMessage = finalMessage.replace(/\{shop_name\}/g, settings.shop_name);
+        let finalMessage = (settings.whatsapp_message_template as string) || `Dear {customer_name}, thank you for your purchase from {shop_name}!`;
+        finalMessage = finalMessage.replace(/\{customer_name\}/g, bill.customer_name || "Customer");
+        finalMessage = finalMessage.replace(/\{shop_name\}/g, (settings.shop_name as string) || "");
         
         let formattedPhone = bill.customer_phone.replace(/[\s\-\(\)]/g, "");
         if (formattedPhone.startsWith("0")) formattedPhone = "91" + formattedPhone.substring(1);
