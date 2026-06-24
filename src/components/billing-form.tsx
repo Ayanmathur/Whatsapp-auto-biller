@@ -326,6 +326,15 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
         whatsapp_sent_at: (action === "send") && shop.whatsapp_enabled ? new Date().toISOString() : null,
       };
 
+      // To bypass browser popup blockers, we must open the new tab synchronously before the async fetch
+      let newWindow: Window | null = null;
+      if (action === "print" || (action === "send" && !shop.whatsapp_enabled)) {
+        newWindow = window.open("about:blank", "_blank");
+        if (newWindow) {
+           newWindow.document.write("<div style='font-family: sans-serif; padding: 20px;'>Processing request, please wait...</div>");
+        }
+      }
+
       // Use server API route (bypasses RLS with admin key)
       const saveRes = await fetch("/api/bills", {
         method: "POST",
@@ -336,6 +345,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       const saveJson = await saveRes.json();
 
       if (!saveRes.ok) {
+        if (newWindow) newWindow.close();
         throw new Error(saveJson.error || "Failed to save bill");
       }
 
@@ -343,7 +353,11 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
 
       if (action === "print") {
         toast.success("Bill saved! Opening print preview...");
-        window.open(`/print/${billId}`, "_blank");
+        if (newWindow) {
+          newWindow.location.href = `/print/${billId}`;
+        } else {
+          window.open(`/print/${billId}`, "_blank");
+        }
       }
 
       if (action === "send") {
@@ -369,13 +383,21 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
           } catch {
             // Automation failed, fall back to manual
             const waUrl = `https://wa.me/91${customerPhone}?text=${encodeURIComponent(message)}`;
-            window.open(waUrl, "_blank");
+            if (newWindow) {
+              newWindow.location.href = waUrl;
+            } else {
+              window.open(waUrl, "_blank");
+            }
             toast.success("Bill saved! WhatsApp opened in new tab.");
           }
         } else {
           // Manual mode: open wa.me
           const waUrl = `https://wa.me/91${customerPhone}?text=${encodeURIComponent(message)}`;
-          window.open(waUrl, "_blank");
+          if (newWindow) {
+            newWindow.location.href = waUrl;
+          } else {
+            window.open(waUrl, "_blank");
+          }
           toast.success("Bill saved! WhatsApp opened in new tab.");
         }
       }

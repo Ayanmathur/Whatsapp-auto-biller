@@ -157,9 +157,20 @@ export function BulkMessageClient({ clientId }: { clientId?: string }) {
 
   const openManualWhatsApp = (customer: Customer) => {
     if (!message.trim()) return toast.error("Message cannot be empty.");
+    // Open synchronously
+    const newWindow = window.open("about:blank", "_blank");
+    if (newWindow) {
+      newWindow.document.write("<div style='font-family: sans-serif; padding: 20px;'>Processing request, please wait...</div>");
+    }
+
     const personalizedMsg = message.replace(/\{customer_name\}/g, customer.name);
     const waUrl = `https://wa.me/91${customer.phone}?text=${encodeURIComponent(personalizedMsg)}`;
-    window.open(waUrl, "_blank");
+    
+    if (newWindow) {
+      newWindow.location.href = waUrl;
+    } else {
+      window.open(waUrl, "_blank");
+    }
   };
 
   return (
