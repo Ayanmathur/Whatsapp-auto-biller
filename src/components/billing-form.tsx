@@ -203,12 +203,12 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       setBillNumber(data.bill_number);
       
       if (data.items && Array.isArray(data.items) && data.items.length > 0) {
-         const loadedItems = data.items.map((item: any) => ({
-           id: item.id || generateItemId(),
-           name: item.name || "",
-           qty: item.qty || 1,
-           price: item.price || 0,
-           gst_percent: item.gst_percent || 0
+         const loadedItems = data.items.map((item: Record<string, unknown>) => ({
+           id: (item.id as string) || generateItemId(),
+           name: (item.name as string) || "",
+           qty: (item.qty as number) || 1,
+           price: (item.price as number) || 0,
+           gst_percent: (item.gst_percent as number) || 0
          }));
          setItems(loadedItems);
       }

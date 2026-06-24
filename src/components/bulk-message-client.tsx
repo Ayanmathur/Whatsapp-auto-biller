@@ -29,7 +29,7 @@ export function BulkMessageClient({ clientId }: { clientId?: string }) {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [shop, setShop] = useState<any>(null);
+  const [shop, setShop] = useState<Record<string, unknown> | null>(null);
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
@@ -148,7 +148,7 @@ export function BulkMessageClient({ clientId }: { clientId?: string }) {
       
       toast.success(`Successfully sent ${successCount} messages!`);
       setSelectedPhones(new Set());
-    } catch (err) {
+    } catch {
       toast.error("An error occurred while sending bulk messages.");
     } finally {
       setSending(false);
@@ -190,7 +190,7 @@ export function BulkMessageClient({ clientId }: { clientId?: string }) {
               </Button>
             ) : (
               <p className="text-sm text-amber-600 bg-amber-50 p-3 rounded-md">
-                WhatsApp Automation is turned off in Settings. Please use the manual "Send" buttons in the table below to send messages one by one.
+                WhatsApp Automation is turned off in Settings. Please use the manual &quot;Send&quot; buttons in the table below to send messages one by one.
               </p>
             )}
           </div>
