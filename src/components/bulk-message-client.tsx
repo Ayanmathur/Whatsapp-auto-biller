@@ -104,7 +104,7 @@ export function BulkMessageClient({ clientId }: { clientId?: string }) {
 
   const toggleAll = () => {
     if (selectedPhones.size === customers.length) {
-      setSelectedPhones(newSet());
+      setSelectedPhones(new Set());
     } else {
       setSelectedPhones(new Set(customers.map(c => c.phone)));
     }
