@@ -498,15 +498,17 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       // Step 3: Generate unique bill number just-in-time
       const today = getTodayString();
       const dateForQuery = `${today.slice(0, 4)}-${today.slice(4, 6)}-${today.slice(6, 8)}`;
-      let newBillNumber = billNumber; // Fallback
+      let newBillNumber = billNumber;
 
-      const params = new URLSearchParams({ action: "count", billDate: dateForQuery });
-      if (clientId) params.set("clientId", clientId);
-      const countRes = await fetch(`/api/bills?${params.toString()}`);
-      if (countRes.ok) {
-        const json = await countRes.json();
-        const seq = ((json.count ?? 0) + 1).toString().padStart(3, "0");
-        newBillNumber = `BILL-${today}-${seq}`;
+      if (!savedBillId) {
+        const params = new URLSearchParams({ action: "count", billDate: dateForQuery });
+        if (clientId) params.set("clientId", clientId);
+        const countRes = await fetch(`/api/bills?${params.toString()}`);
+        if (countRes.ok) {
+          const json = await countRes.json();
+          const seq = ((json.count ?? 0) + 1).toString().padStart(3, "0");
+          newBillNumber = `BILL-${today}-${seq}`;
+        }
       }
 
       // Step 4: Save to Supabase
@@ -532,7 +534,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       const saveRes = await fetch("/api/bills", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ billPayload }), // Do not use editBillId to guarantee a new row
+        body: JSON.stringify({ billPayload, editBillId: savedBillId }),
       });
 
       const saveJson = await saveRes.json();
@@ -542,6 +544,8 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       }
 
       const newBillId = saveJson.data?.[0]?.id || newBillNumber;
+      setSavedBillId(newBillId);
+      setBillNumber(newBillNumber);
 
       // Step 5: Open preview in new tab
       const url = `/bill-preview/${newBillId}`;
@@ -561,12 +565,8 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
         });
       }
 
-      // Step 6: Reset form
-      setCustomerName("");
-      setCustomerPhone("");
-      setItems([createEmptyItem(shop.default_gst || 0)]);
-      setSavedBillId(null);
-      generateBillNumber();
+      // Step 6: Do not reset form here, rely on "New Bill / Clear" button.
+      // Allow user to see what they just printed.
 
     } catch (err) {
       console.error("Print failed:", err);
@@ -577,7 +577,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
   }
 
   // ── Send WhatsApp specific flow ────────────────────────────────
-  async function saveBillAndSendWhatsapp() {
+  async function saveBillAndSend() {
     if (!shop) {
       toast.error("Business settings not loaded. Configure your business in Settings first.");
       return;
@@ -603,13 +603,15 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       const dateForQuery = `${today.slice(0, 4)}-${today.slice(4, 6)}-${today.slice(6, 8)}`;
       let newBillNumber = billNumber; 
 
-      const params = new URLSearchParams({ action: "count", billDate: dateForQuery });
-      if (clientId) params.set("clientId", clientId);
-      const countRes = await fetch(`/api/bills?${params.toString()}`);
-      if (countRes.ok) {
-        const json = await countRes.json();
-        const seq = ((json.count ?? 0) + 1).toString().padStart(3, "0");
-        newBillNumber = `BILL-${today}-${seq}`;
+      if (!savedBillId) {
+        const params = new URLSearchParams({ action: "count", billDate: dateForQuery });
+        if (clientId) params.set("clientId", clientId);
+        const countRes = await fetch(`/api/bills?${params.toString()}`);
+        if (countRes.ok) {
+          const json = await countRes.json();
+          const seq = ((json.count ?? 0) + 1).toString().padStart(3, "0");
+          newBillNumber = `BILL-${today}-${seq}`;
+        }
       }
 
       const billPayload = {
@@ -634,7 +636,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       const saveRes = await fetch("/api/bills", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ billPayload }), 
+        body: JSON.stringify({ billPayload, editBillId: savedBillId }), 
       });
 
       const saveJson = await saveRes.json();
@@ -644,9 +646,14 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       }
 
       const newBillId = saveJson.data?.[0]?.id || newBillNumber;
+      setSavedBillId(newBillId);
+      setBillNumber(newBillNumber);
+      
+      // Stop spinner here for WhatsApp step since it's non-blocking
+      setSaving(null);
 
-      // Now send whatsapp using the new utility
-      toast("Sending WhatsApp message...");
+      // STEP 5 — Send WhatsApp using utility
+      toast("Preparing WhatsApp message...");
       const waResult = await sendWhatsappMessage({
         bill: {
           id: newBillId,
@@ -664,25 +671,48 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
 
       if (waResult.success) {
         if (waResult.mode === "auto") {
-          toast.success("WhatsApp sent automatically!");
+          toast.success(`✅ WhatsApp sent to ${customerName.trim()} automatically!`);
         } else {
+          toast.success(`📱 WhatsApp Web opened — send the message to ${customerName.trim()}`);
           if (waResult.popupBlocked && waResult.url) {
-            toast.success("Bill saved! (Popup blocked)", {
+            toast.error("Popup blocked! Click here to open WhatsApp", {
               action: { label: "Open WhatsApp", onClick: () => window.open(waResult.url, "_blank") }
             });
-          } else {
-            toast.success("Bill saved! WhatsApp opened in new tab.");
           }
         }
       } else {
-        toast.error(`WhatsApp failed: ${waResult.error}`);
+        // Fallback to manual if API fails in auto mode
+        toast.error("Auto-send failed. Trying WhatsApp Web...");
+        
+        let finalMessage = shop.whatsapp_message_template || `Dear {customer_name}, thank you for your purchase from {shop_name}!`;
+        finalMessage = finalMessage.replace(/\{customer_name\}/g, customerName.trim());
+        finalMessage = finalMessage.replace(/\{shop_name\}/g, shop.shop_name);
+        
+        let formattedPhone = customerPhone.replace(/[\s\-\(\)]/g, "");
+        if (formattedPhone.startsWith("0")) formattedPhone = "91" + formattedPhone.substring(1);
+        else if (formattedPhone.startsWith("+91")) formattedPhone = formattedPhone.substring(1);
+        else if (formattedPhone.length === 10) formattedPhone = "91" + formattedPhone;
+
+        const encodedMessage = encodeURIComponent(finalMessage);
+        const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodedMessage}`;
+        
+        let opened = false;
+        try {
+          const popup = window.open(whatsappUrl, "_blank");
+          if (popup) opened = true;
+        } catch (e) {}
+
+        if (opened) {
+          toast.success(`📱 WhatsApp Web opened — send the message to ${customerName.trim()}`);
+        } else {
+          toast.error("Popup blocked! Click here to open WhatsApp", {
+            action: { label: "Open WhatsApp", onClick: () => window.open(whatsappUrl, "_blank") }
+          });
+        }
       }
 
-      setCustomerName("");
-      setCustomerPhone("");
-      setItems([createEmptyItem(shop.default_gst || 0)]);
-      setSavedBillId(null);
-      generateBillNumber();
+      // STEP 6: No form reset here. Wait for user to click New Bill / Clear.
+
 
     } catch (err) {
       console.error("Send failed:", err);
@@ -1146,7 +1176,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-end gap-3 pb-6">
         <Button
           variant="secondary"
-          onClick={saveBillAndSendWhatsapp}
+          onClick={saveBillAndSend}
           disabled={saving !== null}
           size="lg"
           className="bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600"
