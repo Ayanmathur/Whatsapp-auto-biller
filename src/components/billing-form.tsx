@@ -482,10 +482,6 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       return;
     }
     const validItems = items.filter((i) => i.name.trim() && i.qty > 0 && i.price > 0);
-    if (validItems.length === 0) {
-      toast.error("Please add at least one valid item.");
-      return;
-    }
 
     setSaving("print");
 
@@ -547,23 +543,9 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       setSavedBillId(newBillId);
       setBillNumber(newBillNumber);
 
-      // Step 5: Open preview in new tab
-      const url = `/bill-preview/${newBillId}`;
-      let opened = false;
-      try {
-        const popup = window.open(url, "_blank");
-        if (popup) opened = true;
-      } catch {
-        // Ignore errors
-      }
-
-      if (opened) {
-        toast.success("Bill saved! Opening preview...");
-      } else {
-        toast.success("Bill saved! (Popup blocked)", {
-          action: { label: "Open Print", onClick: () => window.open(url, "_blank") }
-        });
-      }
+      // Step 5: Redirect to print preview
+      toast.success("Bill saved! Redirecting to print...");
+      window.location.href = `/bill-preview/${newBillId}`;
 
       // Step 6: Do not reset form here, rely on "New Bill / Clear" button.
       // Allow user to see what they just printed.
@@ -587,10 +569,6 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       return;
     }
     const validItems = items.filter((i) => i.name.trim() && i.qty > 0 && i.price > 0);
-    if (validItems.length === 0) {
-      toast.error("Please add at least one valid item.");
-      return;
-    }
 
     setSaving("send");
 
