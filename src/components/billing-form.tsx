@@ -354,7 +354,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
         let opened = false;
         if (newWindow) {
           try {
-            newWindow.location.href = `/print/${billId}`;
+            newWindow.location.href = `/bill-preview/${billId}`;
             opened = true;
           } catch (e) {
             console.error("Popup blocked", e);
@@ -362,7 +362,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
         }
         
         if (!opened) {
-          const fallback = window.open(`/print/${billId}`, "_blank");
+          const fallback = window.open(`/bill-preview/${billId}`, "_blank");
           if (fallback) opened = true;
         }
 
@@ -372,7 +372,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
           toast.success("Bill saved! (Popup blocked)", {
             action: {
               label: "Open Print",
-              onClick: () => window.open(`/print/${billId}`, "_blank")
+              onClick: () => window.open(`/bill-preview/${billId}`, "_blank")
             }
           });
         }
