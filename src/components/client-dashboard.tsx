@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,11 +40,7 @@ export function ClientDashboard({ clientId }: { clientId?: string }) {
   const [sendingSingle, setSendingSingle] = useState<string | null>(null);
   const supabase = createClient();
 
-  useEffect(() => {
-    loadData();
-  }, [clientId]);
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       // Get Shop Settings
@@ -89,7 +85,11 @@ export function ClientDashboard({ clientId }: { clientId?: string }) {
     } finally {
       setLoading(false);
     }
-  }
+  }, [clientId, supabase]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const filteredBills = bills.filter((b) => {
     if (filter === "all") return true;

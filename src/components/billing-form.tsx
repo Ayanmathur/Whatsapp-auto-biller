@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import { generateBillNo } from "@/lib/utils/bill-no";
 import type { BillSize, ProductEntry } from "@/types/database";
 import { PrintBill, type PrintBillData } from "@/components/print-bill";
 
@@ -153,7 +152,7 @@ export function BillingForm({ clientId }: { clientId?: string }) {
     } finally {
       setLoadingShop(false);
     }
-  }, [supabase]);
+  }, [supabase, clientId]);
 
   // ── Generate bill number ──────────────────────────────────────
   const generateBillNumber = useCallback(async () => {
@@ -385,9 +384,10 @@ export function BillingForm({ clientId }: { clientId?: string }) {
         toast.success("Bill saved successfully!");
         resetForm();
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Save failed:", err);
-      toast.error(`Failed to save bill: ${err.message || "Please try again."}`);
+      const errorMessage = err instanceof Error ? err.message : "Please try again.";
+      toast.error(`Failed to save bill: ${errorMessage}`);
     } finally {
       setSaving(null);
     }

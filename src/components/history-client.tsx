@@ -85,7 +85,7 @@ export function HistoryClient({ clientId }: { clientId?: string }) {
     } finally {
       setLoading(false);
     }
-  }, [supabase, dateRange, searchTerm]);
+  }, [supabase, dateRange, searchTerm, clientId]);
 
   useEffect(() => {
     fetchBills();
