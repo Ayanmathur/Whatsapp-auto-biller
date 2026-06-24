@@ -125,7 +125,7 @@ export function SettingsForm() {
           whatsapp_webhook_url: data.whatsapp_webhook_url || "",
           whatsapp_webhook_payload: data.whatsapp_webhook_payload || INITIAL_FORM.whatsapp_webhook_payload,
           products: data.products || [],
-          default_gst: data.default_gst || 0,
+          default_gst: Number(localStorage.getItem("default_gst")) || 0,
         });
         if (data.logo_url) {
           setLogoPreview(data.logo_url);
@@ -260,8 +260,10 @@ export function SettingsForm() {
         whatsapp_webhook_url: form.whatsapp_webhook_url.trim() || null,
         whatsapp_webhook_payload: form.whatsapp_webhook_payload,
         products: form.products,
-        default_gst: form.default_gst,
       };
+
+      // Save default GST locally to avoid database migrations
+      localStorage.setItem("default_gst", form.default_gst.toString());
 
       if (form.id) {
         // Update existing

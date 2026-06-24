@@ -130,7 +130,7 @@ export function BillingForm({ clientId }: { clientId?: string }) {
 
       let query = supabase
         .from("clients")
-        .select("id, shop_name, shop_address, gst_number, logo_url, bill_size, whatsapp_message_template, owner_phone, products, whatsapp_enabled, default_gst");
+        .select("id, shop_name, shop_address, gst_number, logo_url, bill_size, whatsapp_message_template, owner_phone, products, whatsapp_enabled");
 
       if (clientId) {
         query = query.eq("id", clientId);
@@ -144,8 +144,10 @@ export function BillingForm({ clientId }: { clientId?: string }) {
 
       if (data) {
         const shopData = data as ShopInfo;
+        const localDefaultGst = Number(localStorage.getItem("default_gst")) || 0;
+        shopData.default_gst = localDefaultGst;
         setShop(shopData);
-        setItems(prev => [{ ...prev[0], gst_percent: shopData.default_gst || 0 }]);
+        setItems(prev => [{ ...prev[0], gst_percent: localDefaultGst }]);
       }
     } catch (err) {
       console.error("Failed to load shop info:", err);
@@ -391,6 +393,22 @@ export function BillingForm({ clientId }: { clientId?: string }) {
   // ── Render ────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
+      <div className="flex justify-start">
+        <Button
+          variant="outline"
+          onClick={resetForm}
+          disabled={saving !== null}
+          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
+            <path d="M3 6h18" />
+            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+          </svg>
+          Clear / New Bill
+        </Button>
+      </div>
+
       {/* Shop Header */}
       <Card>
         <CardContent className="pt-6">
@@ -797,20 +815,7 @@ export function BillingForm({ clientId }: { clientId?: string }) {
       </Card>
 
       {/* Action Buttons */}
-      <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-3 pb-6">
-        <Button
-          variant="ghost"
-          onClick={resetForm}
-          disabled={saving !== null}
-          className="text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-auto w-full"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
-            <path d="M3 6h18" />
-            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-          </svg>
-          Clear / New Bill
-        </Button>
+      <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-end gap-3 pb-6">
         <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
         <Button
           onClick={() => handleSave("print_and_send")}
