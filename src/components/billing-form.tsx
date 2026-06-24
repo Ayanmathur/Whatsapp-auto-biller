@@ -700,7 +700,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
         try {
           const popup = window.open(whatsappUrl, "_blank");
           if (popup) opened = true;
-        } catch (e) {}
+        } catch {}
 
         if (opened) {
           toast.success(`📱 WhatsApp Web opened — send the message to ${customerName.trim()}`);

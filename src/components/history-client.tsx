@@ -38,7 +38,7 @@ export function HistoryClient({ clientId }: { clientId?: string }) {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [dateRange, setDateRange] = useState("all");
-  const [cachedSettings, setCachedSettings] = useState<any>(null);
+  const [cachedSettings, setCachedSettings] = useState<Record<string, unknown> | null>(null);
   const [sendingWaId, setSendingWaId] = useState<string | null>(null);
   const pathname = usePathname();
 
@@ -242,7 +242,7 @@ export function HistoryClient({ clientId }: { clientId?: string }) {
         try {
           const popup = window.open(whatsappUrl, "_blank");
           if (popup) opened = true;
-        } catch (e) {}
+        } catch {}
 
         if (opened) {
           toast.success(`📱 WhatsApp Web opened — send the message to ${bill.customer_name}`);

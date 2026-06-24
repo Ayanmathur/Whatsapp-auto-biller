@@ -56,8 +56,11 @@ export async function sendWhatsappMessage({ bill, clientSettings }: SendWhatsapp
       });
 
       if (!waRes.ok) {
-        const errorData = await waRes.json().catch(() => ({}));
-        return { success: false, error: errorData.error || "Failed to send via API" };
+        let errorData: Record<string, unknown> = {};
+        try {
+          errorData = await waRes.json();
+        } catch {}
+        return { success: false, error: (errorData.error as string) || "Failed to send via API" };
       }
 
       return { success: true, mode: "auto" };
@@ -71,9 +74,7 @@ export async function sendWhatsappMessage({ bill, clientSettings }: SendWhatsapp
       try {
         const popup = window.open(whatsappUrl, "_blank");
         if (popup) opened = true;
-      } catch (e) {
-        // Ignore popup blocked errors
-      }
+      } catch {}
 
       if (!opened) {
         // If window.open was aggressively blocked, return manual but with a flag so UI can handle it
@@ -82,7 +83,8 @@ export async function sendWhatsappMessage({ bill, clientSettings }: SendWhatsapp
 
       return { success: true, mode: "manual" };
     }
-  } catch (err: any) {
-    return { success: false, error: err.message || "Unknown error occurred" };
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+    return { success: false, error: errorMessage };
   }
 }
