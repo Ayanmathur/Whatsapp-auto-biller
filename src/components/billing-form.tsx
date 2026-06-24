@@ -119,6 +119,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
 
   // Saving
   const [saving, setSaving] = useState<string | null>(null);
+  const [savedBillId, setSavedBillId] = useState<string | null>(null);
 
   // ── Load shop settings (via server API to bypass RLS) ──────────
   const loadShop = useCallback(async () => {
@@ -336,7 +337,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       const saveRes = await fetch("/api/bills", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ billPayload, editBillId }),
+        body: JSON.stringify({ billPayload, editBillId: savedBillId || editBillId }),
       });
 
       const saveJson = await saveRes.json();
@@ -347,13 +348,33 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       }
 
       const billId = saveJson.data?.[0]?.id || billPayload.bill_number;
+      setSavedBillId(billId);
 
       if (action === "print") {
-        toast.success("Bill saved! Opening print preview...");
+        let opened = false;
         if (newWindow) {
-          newWindow.location.href = `/print/${billId}`;
+          try {
+            newWindow.location.href = `/print/${billId}`;
+            opened = true;
+          } catch (e) {
+            console.error("Popup blocked", e);
+          }
+        }
+        
+        if (!opened) {
+          const fallback = window.open(`/print/${billId}`, "_blank");
+          if (fallback) opened = true;
+        }
+
+        if (opened) {
+          toast.success("Bill saved! Opening print preview...");
         } else {
-          window.open(`/print/${billId}`, "_blank");
+          toast.success("Bill saved! (Popup blocked)", {
+            action: {
+              label: "Open Print",
+              onClick: () => window.open(`/print/${billId}`, "_blank")
+            }
+          });
         }
       }
 
@@ -381,22 +402,52 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
           } catch {
             // Automation failed, fall back to manual
             const waUrl = `https://wa.me/91${customerPhone}?text=${encodeURIComponent(message)}`;
+            let opened = false;
             if (newWindow) {
-              newWindow.location.href = waUrl;
-            } else {
-              window.open(waUrl, "_blank");
+              try {
+                newWindow.location.href = waUrl;
+                opened = true;
+              } catch(e) {}
             }
-            toast.success("Bill saved! WhatsApp opened in new tab.");
+            if (!opened) {
+              const fallback = window.open(waUrl, "_blank");
+              if (fallback) opened = true;
+            }
+            if (opened) {
+              toast.success("Bill saved! WhatsApp opened in new tab.");
+            } else {
+              toast.success("Bill saved! (Popup blocked)", {
+                action: {
+                  label: "Open WhatsApp",
+                  onClick: () => window.open(waUrl, "_blank")
+                }
+              });
+            }
           }
         } else {
           // Manual mode: open wa.me
           const waUrl = `https://wa.me/91${customerPhone}?text=${encodeURIComponent(message)}`;
+          let opened = false;
           if (newWindow) {
-            newWindow.location.href = waUrl;
-          } else {
-            window.open(waUrl, "_blank");
+            try {
+              newWindow.location.href = waUrl;
+              opened = true;
+            } catch(e) {}
           }
-          toast.success("Bill saved! WhatsApp opened in new tab.");
+          if (!opened) {
+            const fallback = window.open(waUrl, "_blank");
+            if (fallback) opened = true;
+          }
+          if (opened) {
+            toast.success("Bill saved! WhatsApp opened in new tab.");
+          } else {
+            toast.success("Bill saved! (Popup blocked)", {
+              action: {
+                label: "Open WhatsApp",
+                onClick: () => window.open(waUrl, "_blank")
+              }
+            });
+          }
         }
       }
       
@@ -417,6 +468,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
     setCustomerName("");
     setCustomerPhone("");
     setItems([createEmptyItem(shop?.default_gst || 0)]);
+    setSavedBillId(null);
     generateBillNumber();
   }
 
