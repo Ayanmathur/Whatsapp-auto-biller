@@ -407,7 +407,9 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
               try {
                 newWindow.location.href = waUrl;
                 opened = true;
-              } catch(e) {}
+              } catch {
+                // Ignore cross-origin or popup errors
+              }
             }
             if (!opened) {
               const fallback = window.open(waUrl, "_blank");
@@ -432,7 +434,9 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
             try {
               newWindow.location.href = waUrl;
               opened = true;
-            } catch(e) {}
+            } catch {
+              // Ignore cross-origin or popup errors
+            }
           }
           if (!opened) {
             const fallback = window.open(waUrl, "_blank");
