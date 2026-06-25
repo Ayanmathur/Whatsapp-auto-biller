@@ -321,6 +321,7 @@ export function HistoryClient({ clientId }: { clientId?: string }) {
     styleTag.id = 'bill-print-style';
     styleTag.innerHTML = `
       @media print {
+        html, body { background: white !important; color: black !important; }
         body > *:not(#bill-print-root) {
           display:none !important;visibility:hidden !important;
         }

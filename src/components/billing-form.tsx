@@ -505,27 +505,15 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       const supabase = createClient();
       
       const validItems = items.filter(i => i.name && i.qty && i.price)
-      let billNumberLocal = billNumber;
-      const todayCompact = billDate.replace(/-/g, '')
 
       if (!savedBillId) {
-        // Save to Supabase
-        const { count } = await supabase
-          .from('bills')
-          .select('*', { count: 'exact', head: true })
-          .eq('client_id', shop?.id || '')
-          .gte('created_at', billDate + 'T00:00:00')
-
-        billNumberLocal = 'BILL-' + todayCompact + '-' + 
-          String((count || 0) + 1).padStart(3, '0')
-
         const { data: saved, error } = await supabase
           .from('bills')
           .insert({
             client_id: shop?.id,
             customer_name: customerName.trim(),
             customer_phone: customerPhone.replace(/\D/g, '').slice(-10),
-            bill_number: billNumberLocal,
+            bill_number: billNumber,
             bill_date: billDate,
             items: validItems,
             subtotal: calculations.subtotal || 0,
@@ -544,7 +532,6 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
         }
         
         setSavedBillId(saved.id);
-        setBillNumber(billNumberLocal);
       }
 
       // Build bill HTML as a string — inject into print-area div
@@ -620,7 +607,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
                 : ''}
             </div>
             <div style="text-align:right">
-              <div style="font-weight:bold;font-size:15px">${billNumberLocal}</div>
+              <div style="font-weight:bold;font-size:15px">${billNumber}</div>
               <div style="color:#555;font-size:12px">
                 ${new Date(billDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
               </div>
@@ -661,6 +648,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       styleTag.id = 'bill-print-style'
       styleTag.innerHTML = `
         @media print {
+          html, body { background: white !important; color: black !important; }
           body > *:not(#bill-print-root) {
             display: none !important;
             visibility: hidden !important;
@@ -730,15 +718,6 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
     document.body.removeChild(a)
   }
 
-  // ── Reset form helper ─────────────────────────────────────────
-  function resetForm() {
-    setCustomerName("");
-    setCustomerPhone("");
-    setItems([createEmptyItem(shop?.default_gst || 0)]);
-    setSavedBillId(null);
-    generateBillNumber();
-  }
-
   // ── Loading state ─────────────────────────────────────────────
   if (loadingShop) {
     return (
@@ -772,28 +751,18 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
     generateBillNumber();
   }
 
-  function handleClear() {
+  function handleClearBill() {
+    setCustomerName('');
+    setCustomerPhone('');
+    setPhoneError('');
     setItems([createEmptyItem(shop?.default_gst)]);
+    setSavedBillId(null);
   }
 
   // ── Render ────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
-      <div className="flex justify-start">
-        <Button
-          variant="outline"
-          onClick={resetForm}
-          disabled={saving !== null}
-          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
-            <path d="M3 6h18" />
-            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-          </svg>
-          Clear / New Bill
-        </Button>
-      </div>
+      {/* Top action removed */}
 
       {/* Shop Header */}
       <Card>
@@ -1222,8 +1191,8 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
 
       {/* Action Buttons */}
       <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-end gap-3 pb-6">
-            <Button type="button" variant="outline" onClick={handleClear}>
-              Clear Items
+            <Button type="button" variant="outline" onClick={handleClearBill}>
+              Clear Bill
             </Button>
         <button
           type="button"
