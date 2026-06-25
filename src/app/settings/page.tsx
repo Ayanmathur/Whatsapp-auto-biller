@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useTheme } from 'next-themes'
 
 export default function SettingsPage() {
   const supabase = createClient()
@@ -12,12 +13,9 @@ export default function SettingsPage() {
   const [clientId, setClientId] = useState(null)
   const [charCount, setCharCount] = useState(0)
 
-  const [theme, setTheme] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('admin_theme') || 'light'
-    }
-    return 'light'
-  })
+  const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   const [settings, setSettings] = useState({
     shop_name: '',
@@ -58,12 +56,8 @@ export default function SettingsPage() {
       accent: '#3b82f6',
     },
   }
-  const c = t[theme as keyof typeof t]
-
-  useEffect(() => {
-    document.body.style.background = c.bg
-    document.body.style.color = c.text
-  }, [theme, c.bg, c.text])
+  const currentTheme = mounted && theme === 'dark' ? 'dark' : 'light'
+  const c = t[currentTheme]
 
   useEffect(() => {
     async function load() {
@@ -169,9 +163,7 @@ export default function SettingsPage() {
   }
 
   function toggleTheme() {
-    const next = theme === 'light' ? 'dark' : 'light'
-    setTheme(next)
-    localStorage.setItem('admin_theme', next)
+    setTheme(theme === 'dark' ? 'light' : 'dark')
   }
 
   // ── Shared styles ──
@@ -285,7 +277,7 @@ export default function SettingsPage() {
             fontWeight: 500,
           }}
         >
-          {theme === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode'}
+          {mounted && theme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode'}
         </button>
       </div>
 

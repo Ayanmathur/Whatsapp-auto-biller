@@ -84,6 +84,7 @@ export async function POST(request: NextRequest) {
       .insert({
         user_id: userId,
         username: trimmed,
+        client_password: password,
         shop_name: trimmed,
         shop_address: '',
         gst_number: '00AAAAA0000A1Z0',

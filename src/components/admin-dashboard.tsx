@@ -53,6 +53,7 @@ interface ClientRow {
   owner_phone: string;
   created_at: string;
   next_billing_date: string;
+  client_password?: string;
 }
 
 interface BillRow {
@@ -136,6 +137,11 @@ export function AdminDashboard() {
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [newClientName, setNewClientName] = useState("");
+  const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
+
+  const togglePassword = (id: string) => {
+    setVisiblePasswords(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   // Today's summary
   const [todayBills, setTodayBills] = useState(0);
@@ -796,6 +802,7 @@ export function AdminDashboard() {
                 <TableRow>
                   <TableHead>Business Name</TableHead>
                   <TableHead>Username</TableHead>
+                  <TableHead>Password</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead>Registered At</TableHead>
                   <TableHead>Billing Status</TableHead>
@@ -812,6 +819,21 @@ export function AdminDashboard() {
                         {c.shop_name}
                       </TableCell>
                       <TableCell>{c.username}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-sm">
+                            {visiblePasswords[c.id] ? (c.client_password || '—') : '••••••••'}
+                          </span>
+                          {c.client_password && (
+                            <button
+                              onClick={() => togglePassword(c.id)}
+                              className="text-xs text-muted-foreground hover:text-foreground"
+                            >
+                              {visiblePasswords[c.id] ? 'Hide' : 'Show'}
+                            </button>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>{c.owner_phone}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {formatDate(c.created_at)}
@@ -858,7 +880,7 @@ export function AdminDashboard() {
                 {clients.length === 0 && (
                   <TableRow>
                     <TableCell
-                      colSpan={6}
+                      colSpan={7}
                       className="text-center py-4 text-muted-foreground"
                     >
                       No clients registered yet.

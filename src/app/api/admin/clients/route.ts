@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   const supabase = createAdminClient()
   const { data, error } = await supabase
     .from('clients')
-    .select('id, username, shop_name, gst_number, owner_phone, created_at, user_id, next_billing_date')
+    .select('id, username, shop_name, gst_number, owner_phone, created_at, user_id, next_billing_date, client_password')
     .order('created_at', { ascending: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
