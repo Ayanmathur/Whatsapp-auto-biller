@@ -92,13 +92,6 @@ function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-function getTodayString(): string {
-  const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const dd = String(now.getDate()).padStart(2, "0");
-  return `${yyyy}${mm}${dd}`;
-}
 
 // ── Component ─────────────────────────────────────────────────────
 export function BillingForm({ clientId, editBillId }: { clientId?: string, editBillId?: string }) {
@@ -125,6 +118,8 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
   // Saving
   const [saving, setSaving] = useState<string | null>(null);
   const [savedBillId, setSavedBillId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [displayBillNumber, setDisplayBillNumber] = useState('');
 
 
   // ── Load shop settings (via server API to bypass RLS) ──────────
@@ -156,21 +151,28 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
   // ── Generate bill number (via server API) ──────────────────────
   const generateBillNumber = useCallback(async () => {
     try {
-      const today = getTodayString();
-      const dateForQuery = `${today.slice(0, 4)}-${today.slice(4, 6)}-${today.slice(6, 8)}`;
+      const supabase = createClient();
+      const now = new Date();
+      const date = now.toISOString().split('T')[0].replace(/-/g, '');
+      const hours = String(now.getHours()).padStart(2, '0');
+      const mins = String(now.getMinutes()).padStart(2, '0');
+      const timeSlot = hours + mins;
+      const prefix = 'BILL-' + date + '-' + timeSlot + '-';
 
-      const params = new URLSearchParams({ action: "count", billDate: dateForQuery });
-      if (clientId) params.set("clientId", clientId);
+      const { count } = await supabase
+        .from('bills')
+        .select('*', { count: 'exact', head: true })
+        .ilike('bill_number', prefix + '%');
 
-      const res = await fetch(`/api/bills?${params.toString()}`);
-      const json = await res.json();
-
-      const seq = ((json.count ?? 0) + 1).toString().padStart(3, "0");
-      setBillNumber(`BILL-${today}-${seq}`);
+      setBillNumber(prefix + String((count || 0) + 1).padStart(3, '0'));
     } catch {
-      setBillNumber(`BILL-${getTodayString()}-001`);
+      const now = new Date();
+      const d = now.toISOString().split('T')[0].replace(/-/g, '');
+      const h = String(now.getHours()).padStart(2, '0');
+      const m = String(now.getMinutes()).padStart(2, '0');
+      setBillNumber('BILL-' + d + '-' + h + m + '-001');
     }
-  }, [clientId]);
+  }, []);
 
   useEffect(() => {
     loadShop();
@@ -299,6 +301,13 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
 
   // ── Save bill (via server API to bypass RLS) ──────────────────
   async function handleSave(action: "send" | "print" | "save") {
+    if (isSaving) return;
+    if (savedBillId) {
+      // Bill already saved — do not insert again
+      toast.info('Bill already saved. Click "+ New Bill" to create a new one.');
+      return;
+    }
+    setIsSaving(true);
     if (!shop) {
       toast.error("Business settings not loaded. Configure your business in Settings first.");
       return;
@@ -469,6 +478,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       const errorMessage = err instanceof Error ? err.message : "Please try again.";
       toast.error(`Failed to save bill: ${errorMessage}`);
     } finally {
+      setIsSaving(false);
       setSaving(null);
     }
   }
@@ -476,6 +486,12 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
   // ── Print specific flow ──────────────────────────────────────
   // ── Print specific flow ──────────────────────────────────────
   async function saveAndPrint() {
+    if (isSaving) return;
+    if (savedBillId) {
+      toast.info('Bill already saved. Click "+ New Bill" to create a new one.');
+      return;
+    }
+    setIsSaving(true);
     if (!customerName.trim()) {
       alert('Enter customer name')
       return
@@ -677,6 +693,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       console.error(err);
       toast.error("Failed to save and print.");
     } finally {
+      setIsSaving(false);
       setSaving(null);
     }
   }
@@ -735,6 +752,26 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
     );
   }
 
+  function handleNewBill() {
+    setCustomerName('');
+    setCustomerPhone('');
+    setPhoneError('');
+    setItems([createEmptyItem(shop?.default_gst)]);
+    setSavedBillId(null);
+    setIsSaving(false);
+    setSaving(null);
+    const now = new Date();
+    const d = now.toISOString().split('T')[0].replace(/-/g, '');
+    const h = String(now.getHours()).padStart(2, '0');
+    const m = String(now.getMinutes()).padStart(2, '0');
+    setDisplayBillNumber('BILL-' + d + '-' + h + m + '-???');
+    generateBillNumber();
+  }
+
+  function handleClear() {
+    setItems([createEmptyItem(shop?.default_gst)]);
+  }
+
   // ── Render ────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
@@ -756,6 +793,21 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
 
       {/* Shop Header */}
       <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>New Bill</CardTitle>
+              <CardDescription>
+                <span style={{fontWeight:'bold', color:'#666', fontSize:'13px'}}>
+                  {savedBillId ? billNumber : (displayBillNumber || billNumber)}
+                </span>
+              </CardDescription>
+            </div>
+            <Button onClick={handleNewBill} variant="default">
+              + New Bill
+            </Button>
+          </div>
+        </CardHeader>
         <CardContent className="pt-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
@@ -1166,6 +1218,9 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
 
       {/* Action Buttons */}
       <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-end gap-3 pb-6">
+            <Button type="button" variant="outline" onClick={handleClear}>
+              Clear Items
+            </Button>
         <button
           type="button"
           onClick={openWhatsapp}

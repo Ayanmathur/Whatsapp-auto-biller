@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { SettingsForm } from "@/components/settings-form";
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: "Settings — Billing System",
   description: "Configure your shop details, bill format, and WhatsApp integration.",

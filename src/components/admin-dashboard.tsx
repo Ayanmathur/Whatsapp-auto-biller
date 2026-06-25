@@ -63,6 +63,7 @@ interface BillRow {
   items: unknown[];
   total: number;
   whatsapp_sent: boolean;
+  whatsapp_sent_at: string | null;
   created_at: string;
   bill_date: string;
 }
@@ -147,6 +148,7 @@ export function AdminDashboard() {
 
   // Recent bills (last 10)
   const [recentBills, setRecentBills] = useState<BillRow[]>([]);
+  const [clientSettings, setClientSettings] = useState<Record<string, unknown> | null>(null);
 
   const loadAdminData = useCallback(async () => {
     setLoading(true);
@@ -213,6 +215,17 @@ export function AdminDashboard() {
         });
         setWeekData(chartData);
       }
+
+      // Load client settings for whatsapp template
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: settings } = await supabase
+          .from('clients')
+          .select('*')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (settings) setClientSettings(settings);
+      }
     } catch (err) {
       console.error(err);
       toast.error("Failed to load admin data");
@@ -278,6 +291,45 @@ export function AdminDashboard() {
     navigator.clipboard.writeText(text);
     toast.success("Copied to clipboard!");
   };
+
+  function handleDashboardWhatsapp(bill: BillRow) {
+    const raw = (bill.customer_phone || '').replace(/\D/g, '');
+    const ten = raw.slice(-10);
+    if (!ten || ten.length !== 10) {
+      alert('No valid phone for this customer');
+      return;
+    }
+    const template = (clientSettings?.whatsapp_message_template as string) ||
+      'Dear {customer_name}, thank you for visiting!';
+    const msg = template
+      .replace(/\{customer_name\}/gi, bill.customer_name || 'Customer')
+      .replace(/\{shop_name\}/gi, (clientSettings?.shop_name as string) || '');
+    const url = 'https://wa.me/91' + ten +
+      '?text=' + encodeURIComponent(msg);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    supabase.from('bills')
+      .update({
+        whatsapp_sent: true,
+        whatsapp_sent_at: new Date().toISOString()
+      })
+      .eq('id', bill.id)
+      .then(() => {
+        setRecentBills(prev => prev.map(b =>
+          b.id === bill.id
+            ? {...b, whatsapp_sent:true,
+               whatsapp_sent_at: new Date().toISOString()}
+            : b
+        ));
+      });
+  }
 
   if (loading) {
     return (
@@ -643,14 +695,34 @@ export function AdminDashboard() {
                     </TableCell>
                     <TableCell className="text-center">
                       {bill.whatsapp_sent ? (
-                        <Badge
-                          variant="secondary"
-                          className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
-                        >
-                          Sent
-                        </Badge>
+                        <span style={{
+                          background:'#dcfce7', color:'#166534',
+                          padding:'2px 8px', borderRadius:'20px',
+                          fontSize:'11px', fontWeight:'500'
+                        }}>
+                          ✅ Sent
+                        </span>
                       ) : (
-                        <Badge variant="secondary">Pending</Badge>
+                        <div style={{display:'flex',alignItems:'center',gap:6,justifyContent:'center'}}>
+                          <span style={{
+                            background:'#f3f4f6', color:'#666',
+                            padding:'2px 8px', borderRadius:'20px',
+                            fontSize:'11px', fontWeight:'500'
+                          }}>
+                            Not Sent
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleDashboardWhatsapp(bill)}
+                            style={{
+                              background:'#25d366', color:'white', border:'none',
+                              borderRadius:'6px', padding:'3px 8px',
+                              fontSize:'11px', cursor:'pointer'
+                            }}
+                          >
+                            📞 Send
+                          </button>
+                        </div>
                       )}
                     </TableCell>
                   </TableRow>

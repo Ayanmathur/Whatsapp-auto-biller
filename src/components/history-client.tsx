@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+
 import { createClient } from "@/lib/supabase/client";
 
 import { toast } from "sonner";
@@ -30,6 +30,8 @@ interface Bill {
   created_at: string;
   whatsapp_sent_at?: string;
   items: Record<string, unknown>[];
+  subtotal?: number;
+  gst_amount?: number;
 }
 
 export function HistoryClient({ clientId }: { clientId?: string }) {
@@ -39,7 +41,10 @@ export function HistoryClient({ clientId }: { clientId?: string }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [dateRange, setDateRange] = useState("all");
   const [cachedSettings, setCachedSettings] = useState<Record<string, unknown> | null>(null);
-  const pathname = usePathname();
+  const [editingBill, setEditingBill] = useState<Bill | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+
 
   const fetchBills = useCallback(async () => {
     setLoading(true);
@@ -160,25 +165,187 @@ export function HistoryClient({ clientId }: { clientId?: string }) {
     XLSX.writeFile(wb, `Customers_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  // Not async — open tab instantly on click
   function handleWhatsappFromHistory(bill: Bill) {
-    if (!bill.customer_phone) {
-      toast.error("No phone number for this customer.");
+    const raw = (bill.customer_phone || '').replace(/\D/g, '');
+    const ten = raw.slice(-10);
+
+    if (!ten || ten.length !== 10) {
+      toast.error('No valid phone number for this customer');
       return;
     }
-    const cleanPhone = bill.customer_phone.replace(/\D/g, '').slice(-10);
-    const template = (cachedSettings?.whatsapp_message_template as string) || 
-      'Dear {customer_name}, thank you for visiting {shop_name}! We appreciate your business. See you again! 🙏';
-      
-    const message = template
-      .replace(/\{customer_name\}/g, bill.customer_name || 'Customer')
-      .replace(/\{shop_name\}/g, (cachedSettings?.shop_name as string) || '');
 
-    const url = 'https://wa.me/91' + cleanPhone + '?text=' + encodeURIComponent(message);
-    const newTab = window.open(url, '_blank');
-    if (!newTab) {
-      toast.error("Popup blocked! Please allow popups to open WhatsApp Web.");
-    }
+    const template = (cachedSettings?.whatsapp_message_template as string) ||
+      'Dear {customer_name}, thank you for visiting!';
+
+    const msg = template
+      .replace(/\{customer_name\}/gi, bill.customer_name || 'Customer')
+      .replace(/\{shop_name\}/gi, (cachedSettings?.shop_name as string) || '');
+
+    const url = 'https://wa.me/91' + ten +
+      '?text=' + encodeURIComponent(msg);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    // Mark as sent in Supabase
+    supabase
+      .from('bills')
+      .update({
+        whatsapp_sent: true,
+        whatsapp_sent_at: new Date().toISOString()
+      })
+      .eq('id', bill.id)
+      .then(() => {
+        setBills(prev => prev.map(b =>
+          b.id === bill.id
+            ? { ...b, whatsapp_sent: true,
+                whatsapp_sent_at: new Date().toISOString() }
+            : b
+        ));
+      });
+  }
+
+  function handleHistoryPrint(bill: Bill) {
+    const itemRows = (bill.items || []).map((item: Record<string, unknown>, i: number) => {
+      const amt = Number(item.qty || 0) * Number(item.price || item.rate || 0) *
+        (1 + Number(item.gst_percent || item.gst || 0) / 100);
+      return `<tr style="background:${i%2===0?'#fff':'#fafafa'}">
+        <td style="padding:5px 8px">${i+1}</td>
+        <td style="padding:5px 8px">${item.name || ''}</td>
+        <td style="padding:5px 8px;text-align:right">${item.qty || 0}</td>
+        <td style="padding:5px 8px;text-align:right">
+          ₹${Number(item.price || item.rate || 0).toFixed(2)}
+        </td>
+        <td style="padding:5px 8px;text-align:right">${item.gst_percent || item.gst || 0}%</td>
+        <td style="padding:5px 8px;text-align:right">
+          ₹${amt.toFixed(2)}
+        </td>
+      </tr>`;
+    }).join('');
+
+    const billHtml = `
+      <div style="font-family:Carlito,Calibri,Arial,sans-serif;font-size:13px;
+        color:#000;padding:16mm;max-width:740px;margin:0 auto">
+        <div style="display:flex;justify-content:space-between;
+          align-items:flex-start;margin-bottom:16px">
+          <div>
+            ${(cachedSettings?.logo_url as string)
+              ? `<img src="${cachedSettings?.logo_url}" 
+                 style="max-height:60px;margin-bottom:8px;display:block"/>`
+              : ''}
+            <div style="font-size:18px;font-weight:bold">
+              ${(cachedSettings?.shop_name as string) || ''}
+            </div>
+            <div style="color:#555;font-size:12px">
+              ${(cachedSettings?.shop_address as string) || ''}
+            </div>
+            ${(cachedSettings?.gst_number as string)
+              ? `<div style="color:#555;font-size:12px">
+                 GSTIN: ${cachedSettings?.gst_number}</div>`
+              : ''}
+          </div>
+          <div style="text-align:right">
+            <div style="font-weight:bold;font-size:15px">
+              ${bill.bill_number}
+            </div>
+            <div style="color:#555;font-size:12px">
+              ${new Date(bill.created_at).toLocaleDateString('en-IN',{
+                day:'2-digit',month:'short',year:'numeric'
+              })}
+            </div>
+          </div>
+        </div>
+        <hr style="border:none;border-top:1.5px solid #ddd;margin:10px 0"/>
+        <div style="margin-bottom:16px">
+          <div style="font-weight:600;margin-bottom:2px">Bill To:</div>
+          <div>${bill.customer_name}</div>
+          <div style="color:#555;font-size:12px">${bill.customer_phone}</div>
+        </div>
+        ${bill.items && bill.items.length > 0 ? `
+          <table style="width:100%;border-collapse:collapse;
+            font-size:12px;margin-bottom:12px">
+            <thead>
+              <tr style="background:#f3f4f6">
+                <th style="padding:6px 8px;text-align:left">#</th>
+                <th style="padding:6px 8px;text-align:left">Item</th>
+                <th style="padding:6px 8px;text-align:right">Qty</th>
+                <th style="padding:6px 8px;text-align:right">Rate</th>
+                <th style="padding:6px 8px;text-align:right">GST%</th>
+                <th style="padding:6px 8px;text-align:right">Amount</th>
+              </tr>
+            </thead>
+            <tbody>${itemRows}</tbody>
+          </table>
+          <div style="display:flex;justify-content:flex-end">
+            <div style="width:200px;font-size:13px">
+              <div style="display:flex;justify-content:space-between;
+                padding:3px 0;border-top:1px solid #ddd">
+                <span>Subtotal</span>
+                <span>₹${Number(bill.subtotal||0).toFixed(2)}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;
+                padding:3px 0">
+                <span>GST</span>
+                <span>₹${Number(bill.gst_amount||0).toFixed(2)}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;
+                padding:6px 0;border-top:2px solid #333;
+                font-weight:bold;font-size:15px">
+                <span>Total</span>
+                <span>₹${Number(bill.total||0).toFixed(2)}</span>
+              </div>
+            </div>
+          </div>` : ''}
+        <div style="text-align:center;color:#999;font-size:11px;
+          margin-top:24px;padding-top:10px;border-top:1px solid #eee">
+          Thank you for your business!
+        </div>
+      </div>`;
+
+    const existing = document.getElementById('bill-print-root');
+    if (existing) existing.remove();
+    const styleExisting = document.getElementById('bill-print-style');
+    if (styleExisting) styleExisting.remove();
+
+    const container = document.createElement('div');
+    container.id = 'bill-print-root';
+    container.innerHTML = billHtml;
+    document.body.appendChild(container);
+
+    const styleTag = document.createElement('style');
+    styleTag.id = 'bill-print-style';
+    styleTag.innerHTML = `
+      @media print {
+        body > *:not(#bill-print-root) {
+          display:none !important;visibility:hidden !important;
+        }
+        #bill-print-root {
+          display:block !important;visibility:visible !important;
+          position:fixed !important;top:0 !important;left:0 !important;
+          width:100% !important;background:white !important;
+          z-index:999999 !important;
+        }
+        @page { margin:0; size:A4 portrait; }
+      }`;
+    document.head.appendChild(styleTag);
+
+    setTimeout(() => {
+      window.print();
+      window.onafterprint = () => {
+        document.getElementById('bill-print-root')?.remove();
+        document.getElementById('bill-print-style')?.remove();
+        window.onafterprint = null;
+      };
+      setTimeout(() => {
+        document.getElementById('bill-print-root')?.remove();
+        document.getElementById('bill-print-style')?.remove();
+      }, 30000);
+    }, 100);
   }
 
   return (
@@ -261,36 +428,65 @@ export function HistoryClient({ clientId }: { clientId?: string }) {
                           {b.whatsapp_sent ? "Sent" : "Not Sent"}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right space-x-2">
-                        {/* WhatsApp Action Button */}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleWhatsappFromHistory(b)}
-                          className={b.whatsapp_sent ? "text-emerald-500 opacity-70 hover:opacity-100 hover:text-emerald-600" : "text-slate-600 hover:text-emerald-600"}
-                          title={b.whatsapp_sent && b.whatsapp_sent_at ? `Sent on ${new Date(b.whatsapp_sent_at).toLocaleString()}` : "Send WhatsApp"}
-                        >
-                          {b.whatsapp_sent ? (
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                          ) : (
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-                          )}
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => {
-                          const route = pathname.includes('/admin') 
-                            ? `/admin/client/${clientId}?editBillId=${b.id}` 
-                            : `/history/edit/${b.id}`;
-                          window.open(route, '_self');
-                        }}>
-                          Edit
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => window.open(`/api/print?id=${b.id}`, '_blank')}>
-                          Print
-                        </Button>
-                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDelete(b.id)}>
-                          Delete
-                        </Button>
+                      <TableCell className="text-right">
+                        <div style={{display:'flex',gap:'6px',justifyContent:'flex-end'}}>
+                          <button
+                            type="button"
+                            onClick={() => handleWhatsappFromHistory(b)}
+                            title="Send WhatsApp"
+                            style={{
+                              background: '#25d366',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '8px',
+                              padding: '6px 10px',
+                              cursor: 'pointer',
+                              fontSize: '16px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            📞
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleHistoryPrint(b)}
+                            title="Print Bill"
+                            style={{
+                              background: '#f3f4f6',
+                              border: '1px solid #d1d5db',
+                              borderRadius: '8px',
+                              padding: '6px 10px',
+                              cursor: 'pointer',
+                              fontSize: '16px',
+                            }}
+                          >
+                            🖨️
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingBill(b);
+                              setEditName(b.customer_name);
+                              setEditPhone(b.customer_phone);
+                            }}
+                            title="Edit Bill"
+                            style={{
+                              background: '#f3f4f6',
+                              border: '1px solid #d1d5db',
+                              borderRadius: '8px',
+                              padding: '6px 10px',
+                              cursor: 'pointer',
+                              fontSize: '13px',
+                            }}
+                          >
+                            ✏️
+                          </button>
+                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDelete(b.id)}>
+                            Delete
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -300,6 +496,79 @@ export function HistoryClient({ clientId }: { clientId?: string }) {
           </div>
         </CardContent>
       </Card>
+
+      {editingBill && (
+        <div style={{
+          position:'fixed', inset:0, background:'rgba(0,0,0,0.4)',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          zIndex:1000
+        }}>
+          <div style={{
+            background:'white', borderRadius:'12px',
+            padding:'28px', width:'360px',
+            boxShadow:'0 10px 40px rgba(0,0,0,0.15)'
+          }}>
+            <h3 style={{marginBottom:16,fontSize:'16px',fontWeight:'600'}}>
+              Edit Bill — {editingBill.bill_number}
+            </h3>
+            <label style={{fontSize:'13px',fontWeight:'500'}}>
+              Customer Name
+            </label>
+            <input
+              value={editName}
+              onChange={e => setEditName(e.target.value)}
+              style={{width:'100%',padding:'8px 10px',
+                border:'1px solid #d1d5db',borderRadius:'8px',
+                marginBottom:'12px',marginTop:'4px',
+                fontSize:'14px',boxSizing:'border-box'}}
+            />
+            <label style={{fontSize:'13px',fontWeight:'500'}}>
+              Phone Number
+            </label>
+            <input
+              value={editPhone}
+              onChange={e => setEditPhone(e.target.value)}
+              style={{width:'100%',padding:'8px 10px',
+                border:'1px solid #d1d5db',borderRadius:'8px',
+                marginBottom:'20px',marginTop:'4px',
+                fontSize:'14px',boxSizing:'border-box'}}
+            />
+            <div style={{display:'flex',gap:10}}>
+              <button
+                type="button"
+                onClick={async () => {
+                  await supabase.from('bills').update({
+                    customer_name: editName,
+                    customer_phone: editPhone.replace(/\D/g,'').slice(-10)
+                  }).eq('id', editingBill.id);
+                  setBills(prev => prev.map(b =>
+                    b.id === editingBill.id
+                      ? {...b, customer_name:editName,
+                         customer_phone:editPhone.replace(/\D/g,'').slice(-10)}
+                      : b
+                  ));
+                  setEditingBill(null);
+                  toast.success('Bill updated successfully.');
+                }}
+                style={{flex:1,background:'#2563eb',color:'white',
+                  border:'none',borderRadius:'8px',padding:'10px',
+                  fontSize:'14px',cursor:'pointer',fontWeight:'500'}}
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingBill(null)}
+                style={{flex:1,background:'white',color:'#555',
+                  border:'1px solid #d1d5db',borderRadius:'8px',
+                  padding:'10px',fontSize:'14px',cursor:'pointer'}}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

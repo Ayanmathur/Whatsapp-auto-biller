@@ -156,25 +156,69 @@ export function BulkMessageClient({ clientId }: { clientId?: string }) {
   };
 
   const openManualWhatsApp = (customer: Customer) => {
-    if (!message.trim()) return toast.error("Message cannot be empty.");
-    // Open synchronously
-    const newWindow = window.open("about:blank", "_blank");
-    if (newWindow) {
-      newWindow.document.write("<div style='font-family: sans-serif; padding: 20px;'>Processing request, please wait...</div>");
+    const raw = (customer.phone || '').replace(/\D/g, '');
+    const ten = raw.slice(-10);
+
+    if (!ten || ten.length !== 10) {
+      toast.error('Invalid phone: ' + customer.phone);
+      return;
     }
 
-    const personalizedMsg = message.replace(/\{customer_name\}/g, customer.name);
-    const waUrl = `https://wa.me/91${customer.phone}?text=${encodeURIComponent(personalizedMsg)}`;
-    
-    if (newWindow) {
-      newWindow.location.href = waUrl;
-    } else {
-      window.open(waUrl, "_blank");
-    }
+    const template = (shop?.whatsapp_message_template as string) ||
+      message ||
+      'Dear {customer_name}, thank you for visiting!';
+
+    const msg = template
+      .replace(/\{customer_name\}/gi, customer.name || 'Customer')
+      .replace(/\{shop_name\}/gi, (shop?.shop_name as string) || '');
+
+    const url = 'https://wa.me/91' + ten +
+      '?text=' + encodeURIComponent(msg);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   return (
     <div className="space-y-6">
+      {/* Automation Status Banner */}
+      {shop?.whatsapp_automation_enabled ? (
+        <div style={{
+          background:'#f0fdf4', border:'1px solid #86efac',
+          borderRadius:'10px', padding:'14px 16px',
+          marginBottom:'4px', display:'flex',
+          alignItems:'center', gap:'10px'
+        }}>
+          <span style={{fontSize:'20px'}}>✅</span>
+          <div style={{fontWeight:'600', fontSize:'14px', color:'#166534'}}>
+            WhatsApp Automation Active — messages will send automatically
+          </div>
+        </div>
+      ) : (
+        <div style={{
+          background:'#fffbeb', border:'1px solid #fcd34d',
+          borderRadius:'10px', padding:'14px 16px',
+          marginBottom:'4px', display:'flex',
+          alignItems:'center', gap:'10px'
+        }}>
+          <span style={{fontSize:'20px'}}>⚠️</span>
+          <div>
+            <div style={{fontWeight:'600', fontSize:'14px', color:'#92400e'}}>
+              WhatsApp Automation Disabled
+            </div>
+            <div style={{fontSize:'12px', color:'#b45309', marginTop:'2px'}}>
+              Bulk send will open WhatsApp Web for each number manually.
+              Enable API in Settings to automate.
+            </div>
+          </div>
+        </div>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Broadcast Message</CardTitle>
@@ -257,11 +301,14 @@ export function BulkMessageClient({ clientId }: { clientId?: string }) {
                       <TableCell>{c.name || "N/A"}</TableCell>
                       <TableCell>{c.phone}</TableCell>
                       <TableCell className="text-right">
-                        {!shop?.whatsapp_enabled && (
-                          <Button variant="outline" size="sm" onClick={() => openManualWhatsApp(c)}>
-                            Manual Send
-                          </Button>
-                        )}
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => openManualWhatsApp(c)}
+                          style={{background:'#25d366',color:'white',border:'none'}}
+                        >
+                          📞 Send
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))
