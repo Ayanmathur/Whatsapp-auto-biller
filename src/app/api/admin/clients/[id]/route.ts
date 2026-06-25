@@ -82,3 +82,44 @@ export async function PATCH(
 
   return NextResponse.json({ success: true })
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const cookie = request.cookies.get('admin_session')?.value
+  const secret = process.env.ADMIN_SESSION_SECRET || 'default_admin_session_secret_change_me'
+  if (cookie !== secret) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const supabase = createAdminClient()
+
+  // First get the user_id to delete the auth user
+  const { data: client, error: fetchErr } = await supabase
+    .from('clients')
+    .select('user_id')
+    .eq('id', params.id)
+    .single()
+
+  if (fetchErr) {
+    return NextResponse.json({ error: 'Client not found' }, { status: 404 })
+  }
+
+  // Delete from clients table
+  const { error: deleteErr } = await supabase
+    .from('clients')
+    .delete()
+    .eq('id', params.id)
+
+  if (deleteErr) {
+    return NextResponse.json({ error: deleteErr.message }, { status: 500 })
+  }
+
+  // Delete auth user if it exists
+  if (client?.user_id) {
+    await supabase.auth.admin.deleteUser(client.user_id)
+  }
+
+  return NextResponse.json({ success: true })
+}

@@ -26,7 +26,7 @@ export default function RootLayout({
         className="antialiased"
         style={{ fontFamily: "'Carlito', Calibri, 'Gill Sans', sans-serif" }}
       >
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
           <AppShell>{children}</AppShell>
           <Toaster richColors position="top-right" />
         </ThemeProvider>

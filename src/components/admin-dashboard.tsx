@@ -152,6 +152,7 @@ export function AdminDashboard() {
   const [editUsername, setEditUsername] = useState("");
   const [editPassword, setEditPassword] = useState("");
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [isDeletingClient, setIsDeletingClient] = useState(false);
 
   const togglePassword = (id: string) => {
     setVisiblePasswords(prev => ({ ...prev, [id]: !prev[id] }));
@@ -321,6 +322,29 @@ export function AdminDashboard() {
       toast.error(err instanceof Error ? err.message : "Failed to update client");
     } finally {
       setIsSavingEdit(false);
+    }
+  };
+
+  const handleDeleteClient = async () => {
+    if (!editingClient) return;
+    if (!confirm("Are you sure you want to delete this client? This cannot be undone.")) return;
+    
+    setIsDeletingClient(true);
+    try {
+      const res = await fetch(`/api/admin/clients/${editingClient.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || "Failed to delete client");
+      }
+      toast.success("Client deleted successfully");
+      setEditingClient(null);
+      loadAdminData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete client");
+    } finally {
+      setIsDeletingClient(false);
     }
   };
 
@@ -975,11 +999,20 @@ export function AdminDashboard() {
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingClient(null)}>Cancel</Button>
-            <Button onClick={handleSaveEdit} disabled={isSavingEdit}>
-              {isSavingEdit ? "Saving..." : "Save Changes"}
+          <DialogFooter className="flex justify-between sm:justify-between w-full">
+            <Button 
+              variant="destructive" 
+              onClick={handleDeleteClient} 
+              disabled={isDeletingClient || isSavingEdit}
+            >
+              {isDeletingClient ? "Deleting..." : "Delete Client"}
             </Button>
+            <div className="flex space-x-2">
+              <Button variant="outline" onClick={() => setEditingClient(null)}>Cancel</Button>
+              <Button onClick={handleSaveEdit} disabled={isSavingEdit || isDeletingClient}>
+                {isSavingEdit ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
