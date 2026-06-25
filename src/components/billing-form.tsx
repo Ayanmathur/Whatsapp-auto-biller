@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useTheme } from "next-themes";
 
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
@@ -95,6 +96,7 @@ function formatCurrency(amount: number): string {
 
 // ── Component ─────────────────────────────────────────────────────
 export function BillingForm({ clientId, editBillId }: { clientId?: string, editBillId?: string }) {
+  const { theme, setTheme } = useTheme();
 
   // Shop info
   const [shop, setShop] = useState<ShopInfo | null>(null);
@@ -119,8 +121,6 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
   const [saving, setSaving] = useState<string | null>(null);
   const [savedBillId, setSavedBillId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [displayBillNumber, setDisplayBillNumber] = useState('');
-
 
   // ── Load shop settings (via server API to bypass RLS) ──────────
   const loadShop = useCallback(async () => {
@@ -718,6 +718,44 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
     document.body.removeChild(a)
   }
 
+  // ── Keyboard Shortcuts ────────────────────────────────────────
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!e.altKey) return;
+      
+      switch(e.key.toLowerCase()) {
+        case 'n':
+          e.preventDefault();
+          handleNewBill();
+          break;
+        case 'c':
+          e.preventDefault();
+          handleClearBill();
+          break;
+        case 'p':
+          e.preventDefault();
+          saveAndPrint();
+          break;
+        case 's':
+          e.preventDefault();
+          handleSave("save");
+          break;
+        case 'w':
+          e.preventDefault();
+          openWhatsapp();
+          break;
+        case 't':
+          e.preventDefault();
+          setTheme(theme === 'dark' ? 'light' : 'dark');
+          break;
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [theme, setTheme]);
+
   // ── Loading state ─────────────────────────────────────────────
   if (loadingShop) {
     return (
@@ -743,11 +781,6 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
     setSavedBillId(null);
     setIsSaving(false);
     setSaving(null);
-    const now = new Date();
-    const d = now.toISOString().split('T')[0].replace(/-/g, '');
-    const h = String(now.getHours()).padStart(2, '0');
-    const m = String(now.getMinutes()).padStart(2, '0');
-    setDisplayBillNumber('BILL-' + d + '-' + h + m + '-???');
     generateBillNumber();
   }
 
@@ -767,16 +800,8 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       {/* Shop Header */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>New Bill</CardTitle>
-              <CardDescription>
-                <span style={{fontWeight:'bold', color:'#666', fontSize:'13px'}}>
-                  {savedBillId ? billNumber : (displayBillNumber || billNumber)}
-                </span>
-              </CardDescription>
-            </div>
-            <Button onClick={handleNewBill} variant="default">
+          <div className="flex items-center justify-end">
+            <Button onClick={handleNewBill} variant="default" title="New Bill (Alt + N)">
               + New Bill
             </Button>
           </div>
@@ -1191,12 +1216,13 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
 
       {/* Action Buttons */}
       <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-end gap-3 pb-6">
-            <Button type="button" variant="outline" onClick={handleClearBill}>
+            <Button type="button" variant="outline" onClick={handleClearBill} title="Clear Bill (Alt + C)">
               Clear Bill
             </Button>
         <button
           type="button"
           onClick={openWhatsapp}
+          title="Send WhatsApp (Alt + W)"
           style={{
             background: '#25d366', color: 'white',
             border: 'none', borderRadius: '8px',
@@ -1213,6 +1239,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
           onClick={saveAndPrint}
           disabled={saving !== null}
           size="lg"
+          title="Save & Print (Alt + P)"
         >
           {saving === "print" ? <Spinner /> : null}
           🖨️ Save & Print
@@ -1224,6 +1251,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
           onClick={() => handleSave("save")}
           disabled={saving !== null}
           size="lg"
+          title="Save Only (Alt + S)"
         >
           {saving === "save" ? <Spinner /> : null}
           💾 Save Only

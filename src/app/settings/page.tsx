@@ -263,6 +263,7 @@ export default function SettingsPage() {
         <button
           type="button"
           onClick={toggleTheme}
+          title="Switch Theme (Alt + T)"
           style={{
             background: c.surfaceAlt,
             border: '1px solid ' + c.border,
