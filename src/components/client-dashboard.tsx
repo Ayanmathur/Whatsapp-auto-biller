@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { RefreshCw } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
 
 
 type Bill = {
@@ -124,6 +125,40 @@ export function ClientDashboard({ clientId }: { clientId?: string }) {
   
   // Unique customers based on phone number
   const uniqueCustomers = new Set(filteredBills.map(b => b.customer_phone)).size;
+
+  // Chart data calculation
+  const chartDataMap = new Map<string, { date: string, revenue: number, bills: number, rawDate: number }>();
+  let daysToShow = 0;
+  if (filter === "day") daysToShow = 1;
+  else if (filter === "week") daysToShow = 7;
+  else if (filter === "month") daysToShow = 30;
+  
+  if (daysToShow > 0) {
+    for (let i = daysToShow - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+      const key = d.toLocaleDateString("en-IN", { month: "short", day: "numeric" });
+      chartDataMap.set(key, { date: key, revenue: 0, bills: 0, rawDate: d.getTime() });
+    }
+  }
+
+  filteredBills.forEach(b => {
+    const d = new Date(b.created_at);
+    const key = d.toLocaleDateString("en-IN", { month: "short", day: "numeric" });
+    if (chartDataMap.has(key)) {
+      const entry = chartDataMap.get(key)!;
+      entry.revenue += Number(b.total) || 0;
+      entry.bills += 1;
+    } else if (filter === "all") {
+       if (!chartDataMap.has(key)) {
+         chartDataMap.set(key, { date: key, revenue: 0, bills: 0, rawDate: new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() });
+       }
+       const entry = chartDataMap.get(key)!;
+       entry.revenue += Number(b.total) || 0;
+       entry.bills += 1;
+    }
+  });
+  
+  const chartData = Array.from(chartDataMap.values()).sort((a, b) => a.rawDate - b.rawDate);
 
   const handleResend = async (bill: Bill) => {
     if (!shop?.whatsapp_enabled) {
@@ -286,6 +321,42 @@ export function ClientDashboard({ clientId }: { clientId?: string }) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Revenue Chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Revenue & Bills Overview</CardTitle>
+          <CardDescription>Visualizing data for the selected period.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {chartData.length === 0 || chartData.every(d => d.revenue === 0 && d.bills === 0) ? (
+            <div className="flex items-center justify-center py-12 text-muted-foreground">
+              No billing data to display for this period.
+            </div>
+          ) : (
+            <div className="h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="date" className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                  <YAxis 
+                    yAxisId="revenue" 
+                    orientation="left" 
+                    className="text-xs" 
+                    tick={{ fill: "hsl(var(--muted-foreground))" }}
+                    tickFormatter={(v) => `₹${v}`}
+                  />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: "hsl(var(--popover))", borderRadius: "8px", border: "1px solid hsl(var(--border))", color: "hsl(var(--popover-foreground))" }}
+                    itemStyle={{ color: "hsl(var(--foreground))" }}
+                  />
+                  <Bar yAxisId="revenue" dataKey="revenue" fill="#10b981" radius={[4, 4, 0, 0]} name="Revenue (₹)" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Action Row */}
       <div className="flex justify-between items-center bg-card border rounded-lg p-4">
