@@ -114,7 +114,7 @@ export function BulkMessageClient({ clientId }: { clientId?: string }) {
     if (selectedPhones.size === 0) return toast.error("Select at least one customer.");
     if (!message.trim()) return toast.error("Message cannot be empty.");
 
-    if (!shop?.whatsapp_enabled) {
+    if (!shop?.whatsapp_automation_enabled) {
       return toast.error("WhatsApp Automation is disabled. You can only send manually via the table buttons.");
     }
 
@@ -238,7 +238,7 @@ export function BulkMessageClient({ clientId }: { clientId?: string }) {
               value={message}
               onChange={(e) => setMessage(e.target.value)}
             />
-            {shop?.whatsapp_enabled ? (
+            {shop?.whatsapp_automation_enabled ? (
               <Button onClick={handleBulkSend} disabled={sending || selectedPhones.size === 0}>
                 {sending ? <Spinner /> : null}
                 Send to {selectedPhones.size} Customers (Automated)

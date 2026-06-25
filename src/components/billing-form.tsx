@@ -303,8 +303,13 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
   async function handleSave(action: "send" | "print" | "save") {
     if (isSaving) return;
     if (savedBillId) {
-      // Bill already saved — do not insert again
-      toast.info('Bill already saved. Click "+ New Bill" to create a new one.');
+      if (action === "print") {
+        window.open(`/bill-preview/${savedBillId}`, "_blank");
+      } else if (action === "send") {
+        openWhatsapp();
+      } else {
+        toast.info('Bill already saved. Click "+ New Bill" to create a new one.');
+      }
       return;
     }
     setIsSaving(true);
@@ -487,13 +492,10 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
   // ── Print specific flow ──────────────────────────────────────
   async function saveAndPrint() {
     if (isSaving) return;
-    if (savedBillId) {
-      toast.info('Bill already saved. Click "+ New Bill" to create a new one.');
-      return;
-    }
     setIsSaving(true);
     if (!customerName.trim()) {
       alert('Enter customer name')
+      setIsSaving(false);
       return
     }
 
@@ -502,46 +504,48 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
     try {
       const supabase = createClient();
       
-      // Save to Supabase
-      const today = new Date().toISOString().split('T')[0]
-      const todayCompact = today.replace(/-/g, '')
-
-      const { count } = await supabase
-        .from('bills')
-        .select('*', { count: 'exact', head: true })
-        .eq('client_id', shop?.id || '')
-        .gte('created_at', today + 'T00:00:00')
-
-      const billNumberLocal = 'BILL-' + todayCompact + '-' + 
-        String((count || 0) + 1).padStart(3, '0')
-
       const validItems = items.filter(i => i.name && i.qty && i.price)
+      let billNumberLocal = billNumber;
+      const todayCompact = billDate.replace(/-/g, '')
 
-      const { data: saved, error } = await supabase
-        .from('bills')
-        .insert({
-          client_id: shop?.id,
-          customer_name: customerName.trim(),
-          customer_phone: customerPhone.replace(/\D/g, '').slice(-10),
-          bill_number: billNumberLocal,
-          bill_date: today,
-          items: validItems,
-          subtotal: calculations.subtotal || 0,
-          gst_amount: calculations.totalGST || 0,
-          total: calculations.grandTotal || 0,
-          whatsapp_sent: false,
-        })
-        .select('id')
-        .single()
+      if (!savedBillId) {
+        // Save to Supabase
+        const { count } = await supabase
+          .from('bills')
+          .select('*', { count: 'exact', head: true })
+          .eq('client_id', shop?.id || '')
+          .gte('created_at', billDate + 'T00:00:00')
 
-      if (error) {
-        alert('Save failed: ' + error.message)
-        setSaving(null)
-        return
+        billNumberLocal = 'BILL-' + todayCompact + '-' + 
+          String((count || 0) + 1).padStart(3, '0')
+
+        const { data: saved, error } = await supabase
+          .from('bills')
+          .insert({
+            client_id: shop?.id,
+            customer_name: customerName.trim(),
+            customer_phone: customerPhone.replace(/\D/g, '').slice(-10),
+            bill_number: billNumberLocal,
+            bill_date: billDate,
+            items: validItems,
+            subtotal: calculations.subtotal || 0,
+            gst_amount: calculations.totalGST || 0,
+            total: calculations.grandTotal || 0,
+            whatsapp_sent: false,
+          })
+          .select('id')
+          .single()
+
+        if (error) {
+          alert('Save failed: ' + error.message)
+          setSaving(null)
+          setIsSaving(false)
+          return
+        }
+        
+        setSavedBillId(saved.id);
+        setBillNumber(billNumberLocal);
       }
-      
-      setSavedBillId(saved.id);
-      setBillNumber(billNumberLocal);
 
       // Build bill HTML as a string — inject into print-area div
       const itemRows = validItems.map((item, i) => {
@@ -618,7 +622,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
             <div style="text-align:right">
               <div style="font-weight:bold;font-size:15px">${billNumberLocal}</div>
               <div style="color:#555;font-size:12px">
-                ${new Date(today).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                ${new Date(billDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
               </div>
             </div>
           </div>

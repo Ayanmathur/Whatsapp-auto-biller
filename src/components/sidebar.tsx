@@ -4,10 +4,29 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Separator } from "@/components/ui/separator";
+
+const t = {
+  light: {
+    background: '#ffffff',
+    borderRight: '1px solid #e5e7eb',
+    text: '#374151',
+    iconColor: '#6b7280',
+    activeBackground: '#eff6ff',
+    activeColor: '#2563eb',
+    hoverBackground: '#f9fafb',
+  },
+  dark: {
+    background: '#111111',
+    borderRight: '1px solid #2a2a2a',
+    text: '#ffffff',
+    iconColor: '#9ca3af',
+    activeBackground: '#1e3a5f',
+    activeColor: '#60a5fa',
+    hoverBackground: '#1a1a1a',
+  }
+};
 
 const navItems = [
   {
@@ -71,8 +90,13 @@ function NavContent() {
   const router = useRouter();
   const supabase = createClient();
   const [username, setUsername] = useState("");
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('client_theme') as 'light' | 'dark';
+      if (stored) setTheme(stored);
+    }
     supabase.auth.getUser().then(({ data }) => {
       if (data.user?.email) {
         setUsername(data.user.email.replace("@billing.app", ""));
@@ -86,12 +110,24 @@ function NavContent() {
     router.refresh();
   };
 
+  const c = t[theme];
+
   return (
-    <div className="flex flex-col h-full">
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100%',
+      background: c.background,
+      color: c.text,
+      transition: 'background 0.2s, color 0.2s'
+    }}>
       {/* Logo/Brand */}
-      <div className="p-6">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+      <div style={{ padding: '24px' }}>
+        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none', color: 'inherit' }}>
+          <div style={{
+            display: 'flex', height: '36px', width: '36px', alignItems: 'center', justifyContent: 'center',
+            borderRadius: '8px', background: '#2563eb', color: 'white', flexShrink: 0
+          }}>
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
               <path d="M13 5v2" />
@@ -100,28 +136,42 @@ function NavContent() {
             </svg>
           </div>
           <div>
-            <h2 className="text-lg font-bold tracking-tight">Billing System</h2>
-            <p className="text-xs text-muted-foreground">Invoice Manager</p>
+            <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0, letterSpacing: '-0.025em' }}>Billing System</h2>
+            <p style={{ fontSize: '12px', margin: 0, color: c.iconColor }}>Invoice Manager</p>
           </div>
         </Link>
       </div>
 
-      <Separator />
+      <div style={{ borderBottom: c.borderRight, width: '100%' }} />
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1">
+      <nav style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
         {navItems.map((item) => {
           const isActive = pathname === item.href;
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground",
-                isActive
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground"
-              )}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '12px', borderRadius: '8px',
+                padding: '10px 12px', fontSize: '14px', fontWeight: 500,
+                background: isActive ? c.activeBackground : 'transparent',
+                color: isActive ? c.activeColor : c.iconColor,
+                textDecoration: 'none',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.background = c.hoverBackground;
+                  e.currentTarget.style.color = c.text;
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = c.iconColor;
+                }
+              }}
             >
               {item.icon}
               {item.title}
@@ -131,12 +181,26 @@ function NavContent() {
         {username === "admin" && (
           <Link
             href="/admin"
-            className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground",
-              pathname.startsWith("/admin")
-                ? "bg-accent text-accent-foreground"
-                : "text-muted-foreground"
-            )}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '12px', borderRadius: '8px',
+              padding: '10px 12px', fontSize: '14px', fontWeight: 500,
+              background: pathname.startsWith("/admin") ? c.activeBackground : 'transparent',
+              color: pathname.startsWith("/admin") ? c.activeColor : c.iconColor,
+              textDecoration: 'none',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              if (!pathname.startsWith("/admin")) {
+                e.currentTarget.style.background = c.hoverBackground;
+                e.currentTarget.style.color = c.text;
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!pathname.startsWith("/admin")) {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = c.iconColor;
+              }
+            }}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -146,32 +210,45 @@ function NavContent() {
         )}
       </nav>
 
-      <div className="mt-auto">
-        <Separator />
-        <div className="p-4 space-y-2">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground px-2">
-            <div className="h-2 w-2 rounded-full bg-emerald-500" />
-            <span className="truncate">{username || "Loading..."}</span>
+      <div style={{ marginTop: 'auto' }}>
+        <div style={{ borderBottom: c.borderRight, width: '100%' }} />
+        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: c.iconColor, padding: '0 8px' }}>
+            <div style={{ height: '8px', width: '8px', borderRadius: '50%', background: '#10b981', flexShrink: 0 }} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {username || "Loading..."}
+            </span>
+            <button
+              type="button"
+              onClick={handleLogout}
+              title="Logout"
+              style={{
+                background: 'transparent',
+                border: '1px solid ' + c.iconColor,
+                borderRadius: '6px',
+                padding: '4px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '28px',
+                height: '28px',
+                color: c.text,
+                marginLeft: 'auto'
+              }}
+            >
+              ⏻
+            </button>
           </div>
-          <button
-            onClick={handleLogout}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" x2="9" y1="12" y2="12" />
-            </svg>
-            Logout
-          </button>
         </div>
       </div>
 
-      <Separator />
+      <div style={{ borderBottom: c.borderRight, width: '100%' }} />
 
       {/* Footer */}
-      <div className="p-4">
-        <p className="text-xs text-muted-foreground text-center">
+      <div style={{ padding: '16px' }}>
+        <p style={{ fontSize: '12px', color: c.iconColor, textAlign: 'center', margin: 0 }}>
           Billing System v0.1.0
         </p>
       </div>
@@ -183,7 +260,7 @@ export function Sidebar() {
   return (
     <>
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex md:fixed md:inset-y-0 md:z-50 md:w-64 md:flex-col border-r bg-card">
+      <aside className="hidden md:flex md:fixed md:inset-y-0 md:z-50 md:w-64 md:flex-col border-r border-[#e5e7eb] dark:border-[#2a2a2a] bg-card">
         <NavContent />
       </aside>
 
