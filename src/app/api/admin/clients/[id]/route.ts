@@ -14,8 +14,40 @@ export async function PATCH(
   const data = await request.json()
   const supabase = createAdminClient()
   
-  // We only extract the fields we allow admin to update
-  const payload = {
+  // If we are updating username or password, we must update Supabase Auth
+  if (data.username || data.client_password) {
+    const { data: client, error: clientErr } = await supabase
+      .from('clients')
+      .select('user_id')
+      .eq('id', params.id)
+      .single()
+
+    if (clientErr) {
+      return NextResponse.json({ error: 'Client not found' }, { status: 404 })
+    }
+
+    if (client?.user_id) {
+      const authUpdates: Record<string, string> = {}
+      if (data.username) {
+        authUpdates.email = `${data.username}@billing.app`
+      }
+      if (data.client_password) {
+        authUpdates.password = data.client_password
+      }
+
+      const { error: authError } = await supabase.auth.admin.updateUserById(
+        client.user_id,
+        authUpdates
+      )
+      
+      if (authError) {
+        return NextResponse.json({ error: authError.message }, { status: 400 })
+      }
+    }
+  }
+
+  // Extract the fields we allow admin to update
+  const payload: Record<string, unknown> = {
     shop_name: data.shop_name,
     shop_address: data.shop_address,
     gst_number: data.gst_number,
@@ -28,7 +60,16 @@ export async function PATCH(
     whatsapp_instance_id: data.whatsapp_instance_id,
     whatsapp_api_key: data.whatsapp_api_key,
     whatsapp_message_template: data.whatsapp_message_template,
+    username: data.username,
+    client_password: data.client_password,
   }
+
+  // Remove undefined fields
+  Object.keys(payload).forEach(key => {
+    if (payload[key] === undefined) {
+      delete payload[key]
+    }
+  })
 
   const { error } = await supabase
     .from('clients')

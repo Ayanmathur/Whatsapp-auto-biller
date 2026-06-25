@@ -26,6 +26,15 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
   Table,
   TableBody,
   TableCell,
@@ -138,6 +147,11 @@ export function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [newClientName, setNewClientName] = useState("");
   const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
+
+  const [editingClient, setEditingClient] = useState<ClientRow | null>(null);
+  const [editUsername, setEditUsername] = useState("");
+  const [editPassword, setEditPassword] = useState("");
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const togglePassword = (id: string) => {
     setVisiblePasswords(prev => ({ ...prev, [id]: !prev[id] }));
@@ -273,8 +287,40 @@ export function AdminDashboard() {
       if (!res.ok) throw new Error("Failed to update key status");
       toast.success(`License key ${currentStatus ? "revoked" : "reactivated"}`);
       loadAdminData();
-    } catch {
-      toast.error("Failed to update key status");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to toggle key");
+    }
+  };
+
+  const handleEditClick = (client: ClientRow) => {
+    setEditingClient(client);
+    setEditUsername(client.username || "");
+    setEditPassword(client.client_password || "");
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingClient) return;
+    setIsSavingEdit(true);
+    try {
+      const res = await fetch(`/api/admin/clients/${editingClient.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: editUsername,
+          client_password: editPassword,
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || "Failed to update client");
+      }
+      toast.success("Client credentials updated successfully");
+      setEditingClient(null);
+      loadAdminData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update client");
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -860,9 +906,16 @@ export function AdminDashboard() {
                             className="bg-emerald-600 hover:bg-emerald-700"
                             onClick={() => markClientPaid(c.id)}
                           >
-                            Mark Paid
+                          Mark Paid
                           </Button>
                         )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditClick(c)}
+                        >
+                          Edit
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"
@@ -892,6 +945,44 @@ export function AdminDashboard() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={!!editingClient} onOpenChange={(open) => !open && setEditingClient(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Client Credentials</DialogTitle>
+            <DialogDescription>
+              Update the username and password for {editingClient?.shop_name}. These will be used for their next login.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="username" className="text-right">Username</Label>
+              <Input
+                id="username"
+                value={editUsername}
+                onChange={(e) => setEditUsername(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="password" className="text-right">Password</Label>
+              <Input
+                id="password"
+                type="text"
+                value={editPassword}
+                onChange={(e) => setEditPassword(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingClient(null)}>Cancel</Button>
+            <Button onClick={handleSaveEdit} disabled={isSavingEdit}>
+              {isSavingEdit ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

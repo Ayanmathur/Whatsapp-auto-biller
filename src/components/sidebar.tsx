@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
@@ -73,11 +72,8 @@ function NavContent({ isCollapsed, setIsCollapsed }: { isCollapsed?: boolean, se
   const supabase = createClient();
   const [username, setUsername] = useState("");
   const [shopName, setShopName] = useState("");
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
     supabase.auth.getUser().then(async ({ data }) => {
       if (data.user?.email) {
         setUsername(data.user.email.replace("@billing.app", ""));
@@ -207,14 +203,7 @@ function NavContent({ isCollapsed, setIsCollapsed }: { isCollapsed?: boolean, se
               {/* Spacer if needed */}
             </div>
           )}
-          <button
-            type="button"
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            title="Toggle Theme"
-            className="flex items-center justify-center w-8 h-8 rounded-md bg-transparent border border-muted-foreground/30 text-foreground cursor-pointer hover:bg-muted transition-colors"
-          >
-            {mounted && theme === 'dark' ? '☀️' : '🌙'}
-          </button>
+
           <button
             type="button"
             onClick={handleLogout}
