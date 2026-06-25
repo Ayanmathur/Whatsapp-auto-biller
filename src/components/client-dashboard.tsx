@@ -7,9 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { AlertCircle, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import Link from "next/link";
+import { RefreshCw } from "lucide-react";
+
 
 type Bill = {
   id: string;
@@ -224,22 +223,7 @@ export function ClientDashboard({ clientId }: { clientId?: string }) {
         </div>
       </div>
 
-      {shop && !shop.whatsapp_enabled && (
-        <Alert variant="destructive" className="bg-destructive/10">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>WhatsApp Automation Disabled</AlertTitle>
-          <AlertDescription className="flex items-center justify-between">
-            <span>You cannot send automated messages. Enable your API settings to use this feature.</span>
-            {!clientId && (
-              <Link href="/settings">
-                <Button variant="outline" size="sm" className="ml-4 border-destructive text-destructive hover:bg-destructive hover:text-white">
-                  Enable Now
-                </Button>
-              </Link>
-            )}
-          </AlertDescription>
-        </Alert>
-      )}
+
 
       {/* Revenue Metrics */}
       <div className="grid gap-4 md:grid-cols-3">
@@ -333,8 +317,7 @@ export function ClientDashboard({ clientId }: { clientId?: string }) {
                   <TableHead>Phone</TableHead>
                   <TableHead>Bill Amount</TableHead>
                   <TableHead>Date</TableHead>
-                  <TableHead>WhatsApp Status</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
+                  <TableHead className="text-center">WhatsApp</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -344,26 +327,39 @@ export function ClientDashboard({ clientId }: { clientId?: string }) {
                     <TableCell>{bill.customer_phone}</TableCell>
                     <TableCell>₹{Number(bill.total).toLocaleString("en-IN")}</TableCell>
                     <TableCell>{new Date(bill.created_at).toLocaleDateString("en-IN")}</TableCell>
-                    <TableCell>
+                    <TableCell className="text-center">
                       {bill.whatsapp_sent ? (
-                        <span className="flex items-center text-sm text-emerald-600 font-medium">
-                          <CheckCircle2 className="h-4 w-4 mr-1" /> Sent
+                        <span style={{
+                          background:'#dcfce7', color:'#166534',
+                          padding:'2px 8px', borderRadius:'20px',
+                          fontSize:'11px', fontWeight:'500'
+                        }}>
+                          ✅ Sent
                         </span>
                       ) : (
-                        <span className="flex items-center text-sm text-destructive font-medium">
-                          <XCircle className="h-4 w-4 mr-1" /> Not Sent
-                        </span>
+                        <div style={{display:'flex',alignItems:'center',gap:6,justifyContent:'center'}}>
+                          <span style={{
+                            background:'#f3f4f6', color:'#666',
+                            padding:'2px 8px', borderRadius:'20px',
+                            fontSize:'11px', fontWeight:'500'
+                          }}>
+                            Not Sent
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleResend(bill)}
+                            disabled={sendingSingle === bill.id}
+                            style={{
+                              background:'#25d366', color:'white', border:'none',
+                              borderRadius:'6px', padding:'3px 8px',
+                              fontSize:'11px', cursor:'pointer',
+                              opacity: sendingSingle === bill.id ? 0.7 : 1
+                            }}
+                          >
+                            {sendingSingle === bill.id ? 'Sending...' : '📞 Send'}
+                          </button>
+                        </div>
                       )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={sendingSingle === bill.id || !shop?.whatsapp_enabled}
-                        onClick={() => handleResend(bill)}
-                      >
-                        {sendingSingle === bill.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : "Send"}
-                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
