@@ -864,11 +864,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       ];
     });
 
-    setLastScanFeedback({
-      type: 'success',
-      message: `✅ ${product.name} — ₹${product.price}`,
-    });
-    setTimeout(() => setLastScanFeedback(null), 2000);
+    toast.success(`✅ ${product.name} — ₹${product.price}`);
   }
 
   // Wire the hardware scanner hook
