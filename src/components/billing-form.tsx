@@ -125,8 +125,6 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
   const [items, setItems] = useState<LineItem[]>([createEmptyItem()]);
 
   // Hardware scanner
-  const [hardwareScannerEnabled, setHardwareScannerEnabled] = useState(true);
-  const [lastScanFeedback, setLastScanFeedback] = useState<ScanFeedback | null>(null);
   const [manualBarcode, setManualBarcode] = useState('');
 
   // Discount & Extra Charges

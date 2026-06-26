@@ -76,7 +76,18 @@ export default function SettingsPage() {
   })
 
   // ── Products state ──
-  const [products, setProducts] = useState<any[]>([])
+  interface SettingsProduct {
+    id?: string;
+    name?: string;
+    size?: string;
+    unit?: string;
+    combo_units?: string;
+    price?: string | number;
+    gst_percent?: string | number;
+    stock?: string | number;
+    barcode_value?: string;
+  }
+  const [products, setProducts] = useState<SettingsProduct[]>([])
   const [showAddProduct, setShowAddProduct] = useState(false)
   const [productSearch, setProductSearch] = useState('')
   const [savingProduct, setSavingProduct] = useState(false)
@@ -247,7 +258,7 @@ export default function SettingsPage() {
     return prefix + timestamp + random
   }
 
-  function printProductLabel(product: any) {
+  function printProductLabel(product: SettingsProduct) {
     const canvas = document.createElement('canvas')
     JsBarcode(canvas, product.barcode_value, {
       format: 'CODE128',
@@ -644,6 +655,7 @@ export default function SettingsPage() {
 
             {settings.logo_url && (
               <div style={{ marginBottom: 12 }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={settings.logo_url}
                   alt="logo preview"
@@ -1025,7 +1037,7 @@ export default function SettingsPage() {
                   (p.size || '').toLowerCase().includes(q) ||
                   p.barcode_value.toLowerCase().includes(q)
               })
-              .map((product: any) => (
+              .map((product: SettingsProduct) => (
                 <div key={product.id} style={{
                   background: c.surfaceAlt,
                   border: '1px solid ' + c.border,
