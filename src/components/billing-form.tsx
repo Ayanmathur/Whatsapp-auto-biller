@@ -834,11 +834,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       .single();
 
     if (error || !product) {
-      setLastScanFeedback({
-        type: 'error',
-        message: `❌ Unknown barcode: ${barcodeValue}`,
-      });
-      setTimeout(() => setLastScanFeedback(null), 3000);
+      toast.error(`❌ Unknown barcode: ${barcodeValue}`);
       return;
     }
 
