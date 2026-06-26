@@ -1066,7 +1066,7 @@ export default function SettingsPage() {
                         fontSize: 12, color: c.textSub,
                         marginBottom: 4,
                       }}>
-                        {product.combo_units > 1
+                        {Number(product.combo_units || 0) > 1
                           ? `${product.combo_units} ${product.unit} `
                           : `${product.unit} `}
                         · ₹{Number(product.price).toFixed(2)}
