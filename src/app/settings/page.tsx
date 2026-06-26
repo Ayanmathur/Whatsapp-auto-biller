@@ -77,15 +77,15 @@ export default function SettingsPage() {
 
   // ── Products state ──
   interface SettingsProduct {
-    id?: string;
-    name?: string;
+    id: string;
+    name: string;
     size?: string;
     unit?: string;
     combo_units?: string;
     price?: string | number;
     gst_percent?: string | number;
     stock?: string | number;
-    barcode_value?: string;
+    barcode_value: string;
   }
   const [products, setProducts] = useState<SettingsProduct[]>([])
   const [showAddProduct, setShowAddProduct] = useState(false)
