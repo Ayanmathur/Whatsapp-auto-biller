@@ -278,7 +278,7 @@ export default function SettingsPage() {
           ${product.name}
           ${product.size ? ' — ' + product.size : ''}
         </div>
-        ${product.unit !== 'pcs' || product.combo_units > 1
+        ${product.unit !== 'pcs' || (product.combo_units && Number(product.combo_units) > 1)
           ? `<div style="font-size:10px;color:#555;margin-bottom:3px">
                ${product.combo_units} ${product.unit}
              </div>`
