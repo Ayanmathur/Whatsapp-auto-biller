@@ -63,10 +63,6 @@ interface LineItem {
   barcode?: string;
 }
 
-interface ScanFeedback {
-  type: 'success' | 'error';
-  message: string;
-}
 
 interface GSTSlabBreakdown {
   slab: number;
