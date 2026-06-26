@@ -260,7 +260,7 @@ export default function SettingsPage() {
 
   function printProductLabel(product: SettingsProduct) {
     const canvas = document.createElement('canvas')
-    JsBarcode(canvas, product.barcode_value, {
+    JsBarcode(canvas, product.barcode_value || '', {
       format: 'CODE128',
       width: 2, height: 60,
       displayValue: true, fontSize: 12,
