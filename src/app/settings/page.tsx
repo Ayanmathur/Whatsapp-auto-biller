@@ -207,7 +207,21 @@ export default function SettingsPage() {
     const { data: urlData } = supabase.storage
       .from('logos')
       .getPublicUrl(path)
-    update('logo_url', urlData.publicUrl)
+    const newUrl = urlData.publicUrl
+    update('logo_url', newUrl)
+    
+    // Auto-save logo URL to database
+    if (clientId) {
+      const { error: updateError } = await supabase
+        .from('clients')
+        .update({ logo_url: newUrl })
+        .eq('id', clientId)
+      if (updateError) {
+        alert('Failed to save logo to database: ' + updateError.message)
+      } else {
+        alert('Logo uploaded and saved successfully!')
+      }
+    }
   }
 
   async function handleSave() {
@@ -724,7 +738,7 @@ export default function SettingsPage() {
                   </button>
 
                   <a
-                    href={settings.logo_url}
+                    href={`/print/sample`}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{

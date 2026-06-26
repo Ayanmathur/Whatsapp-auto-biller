@@ -128,6 +128,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
     gst_percent: number;
   }
   const [dbProducts, setDbProducts] = useState<AutocompleteProduct[]>([]);
+  const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
 
   // Hardware scanner
   const [manualBarcode, setManualBarcode] = useState('');
@@ -1110,12 +1111,6 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
           </Button>
         </CardHeader>
         <CardContent>
-          <datalist id="products-list">
-            {dbProducts.map((p) => (
-              <option key={p.id} value={p.name} />
-            ))}
-          </datalist>
-
           {/* Desktop Table */}
           <div className="hidden md:block rounded-md border">
             <Table>
@@ -1139,13 +1134,36 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
                         {idx + 1}
                       </TableCell>
                       <TableCell>
-                        <Input
-                          placeholder="Item name"
-                          list="products-list"
-                          value={item.name}
-                          onChange={(e) => handleItemNameChange(item.id, e.target.value)}
-                          className="h-9"
-                        />
+                        <div className="relative">
+                          <Input
+                            placeholder="Item name"
+                            value={item.name}
+                            onChange={(e) => handleItemNameChange(item.id, e.target.value)}
+                            onFocus={() => setFocusedItemId(item.id)}
+                            onBlur={() => setFocusedItemId(null)}
+                            className="h-9"
+                          />
+                          {focusedItemId === item.id && dbProducts.filter(p => p.name.toLowerCase().includes((item.name || "").toLowerCase())).length > 0 && (
+                            <div className="absolute z-10 w-full mt-1 bg-card border border-border rounded-md shadow-lg max-h-48 overflow-y-auto" style={{ top: '100%' }}>
+                              {dbProducts
+                                .filter(p => p.name.toLowerCase().includes((item.name || "").toLowerCase()))
+                                .map(p => (
+                                <div
+                                  key={p.id}
+                                  className="px-3 py-2 text-sm hover:bg-accent cursor-pointer border-b border-border last:border-0 flex justify-between items-center"
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    handleItemNameChange(item.id, p.name);
+                                    setFocusedItemId(null);
+                                  }}
+                                >
+                                  <span>{p.name}</span>
+                                  <span className="text-muted-foreground text-xs font-medium">₹{p.price}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Input
@@ -1259,12 +1277,35 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
                       </svg>
                     </Button>
                   </div>
-                  <Input
-                    placeholder="Item name"
-                    list="products-list"
-                    value={item.name}
-                    onChange={(e) => handleItemNameChange(item.id, e.target.value)}
-                  />
+                  <div className="relative">
+                    <Input
+                      placeholder="Item name"
+                      value={item.name}
+                      onChange={(e) => handleItemNameChange(item.id, e.target.value)}
+                      onFocus={() => setFocusedItemId(item.id)}
+                      onBlur={() => setFocusedItemId(null)}
+                    />
+                    {focusedItemId === item.id && dbProducts.filter(p => p.name.toLowerCase().includes((item.name || "").toLowerCase())).length > 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-card border border-border rounded-md shadow-lg max-h-48 overflow-y-auto" style={{ top: '100%' }}>
+                        {dbProducts
+                          .filter(p => p.name.toLowerCase().includes((item.name || "").toLowerCase()))
+                          .map(p => (
+                          <div
+                            key={p.id}
+                            className="px-3 py-2 text-sm hover:bg-accent cursor-pointer border-b border-border last:border-0 flex justify-between items-center"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleItemNameChange(item.id, p.name);
+                              setFocusedItemId(null);
+                            }}
+                          >
+                            <span>{p.name}</span>
+                            <span className="text-muted-foreground text-xs font-medium">₹{p.price}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <div className="grid grid-cols-3 gap-2">
                     <div className="space-y-1">
                       <Label className="text-xs">Qty</Label>

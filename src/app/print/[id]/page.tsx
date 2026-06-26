@@ -15,6 +15,46 @@ export default async function PrintPage({ params }: { params: { id: string } }) 
     supabase = createClient()
   }
 
+  if (params.id === 'sample') {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return <div className="p-10 text-center text-destructive">Access denied. Please login.</div>
+    
+    // We need admin client to bypass RLS if needed, or regular client if RLS allows
+    const adminSupabase = createAdminClient()
+    const { data: client } = await adminSupabase.from('clients').select('*').eq('user_id', user.id).single()
+    if (!client) return <div className="p-10 text-center text-destructive">Shop settings not found. Please complete setup.</div>
+
+    const sampleData = {
+      shopName: client.shop_name || 'Your Shop Name',
+      shopAddress: client.shop_address || 'Your Address',
+      gstNumber: client.gst_number || '22AAAAA0000A1Z5',
+      logoUrl: client.logo_url,
+      billSize: client.bill_size || 'A4',
+      billNumber: "SMPL-001",
+      billDate: new Date().toISOString().split("T")[0],
+      customerName: "John Doe",
+      customerPhone: "9876543210",
+      items: [
+        { name: "Sample Item 1", qty: 2, price: 50, gst_percent: 5 },
+        { name: "Sample Item 2", qty: 1, price: 100, gst_percent: 18 }
+      ],
+      subtotal: 200,
+      totalGST: 23,
+      grandTotal: 223,
+      gstSlabs: [
+        { slab: 5, taxableAmount: 100, cgst: 2.5, sgst: 2.5, totalTax: 5 },
+        { slab: 18, taxableAmount: 100, cgst: 9, sgst: 9, totalTax: 18 }
+      ]
+    }
+
+    return (
+      <>
+        <PrintPreviewClient />
+        <PrintBill data={sampleData} previewMode={true} />
+      </>
+    )
+  }
+
   // Fetch bill and client data
   const { data: bill } = await supabase
     .from('bills')
