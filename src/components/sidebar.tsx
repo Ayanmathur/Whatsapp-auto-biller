@@ -112,8 +112,8 @@ function NavContent({ isCollapsed, setIsCollapsed }: { isCollapsed?: boolean, se
           </div>
           {!isCollapsed && (
             <div className="overflow-hidden whitespace-nowrap">
-              <h2 className="text-lg font-bold m-0 tracking-tight">Billing System</h2>
-              <p className="text-xs m-0 text-muted-foreground">Invoice Manager</p>
+              <h2 className="text-lg font-bold m-0 tracking-tight">Bill Door</h2>
+              <p className="text-xs m-0 text-muted-foreground">Invoice & Billing</p>
             </div>
           )}
         </Link>
@@ -230,7 +230,7 @@ export function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed?: boolean
       </aside>
 
       {/* Mobile Sidebar */}
-      <div className="fixed top-0 left-0 right-0 z-40 flex h-14 items-center border-b bg-[#f3f4f6] px-4 md:hidden">
+      <div className="fixed top-0 left-0 right-0 z-40 flex h-14 items-center border-b bg-background px-4 md:hidden">
         <Sheet>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon" className="mr-2" style={{ color: '#000000' }}>
@@ -246,7 +246,7 @@ export function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed?: boolean
             <NavContent isCollapsed={false} />
           </SheetContent>
         </Sheet>
-        <h1 className="text-lg font-bold" style={{ color: '#000000' }}>Billing System</h1>
+        <h1 className="text-lg font-bold">Bill Door</h1>
       </div>
     </>
   );

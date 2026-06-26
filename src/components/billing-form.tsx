@@ -5,7 +5,7 @@ import { useTheme } from "next-themes";
 
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import type { BillSize, ProductEntry } from "@/types/database";
+import type { BillSize, ProductEntry, DiscountType, ExtraCharge } from "@/types/database";
 import { useHardwareScanner } from "@/hooks/useHardwareScanner";
 
 import { Button } from "@/components/ui/button";
@@ -129,6 +129,11 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
   const [lastScanFeedback, setLastScanFeedback] = useState<ScanFeedback | null>(null);
   const [manualBarcode, setManualBarcode] = useState('');
 
+  // Discount & Extra Charges
+  const [discountType, setDiscountType] = useState<DiscountType>('none');
+  const [discountValue, setDiscountValue] = useState(0);
+  const [extraCharges, setExtraCharges] = useState<ExtraCharge[]>([]);
+
   // Saving
   const [saving, setSaving] = useState<string | null>(null);
   const [savedBillId, setSavedBillId] = useState<string | null>(null);
@@ -224,6 +229,13 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
          }));
          setItems(loadedItems);
       }
+
+      // Load discount & extra charges
+      setDiscountType(data.discount_type || 'none');
+      setDiscountValue(data.discount_value || 0);
+      if (data.extra_charges && Array.isArray(data.extra_charges)) {
+        setExtraCharges(data.extra_charges);
+      }
     }
     fetchBill();
   }, [editBillId, clientId]);
@@ -268,6 +280,21 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
     });
   }
 
+  // ── Extra charge helpers ──────────────────────────────────────
+  function addExtraCharge() {
+    setExtraCharges(prev => [...prev, { label: '', amount: 0 }]);
+  }
+
+  function updateExtraCharge(index: number, field: keyof ExtraCharge, value: string | number) {
+    setExtraCharges(prev => prev.map((ec, i) =>
+      i === index ? { ...ec, [field]: value } : ec
+    ));
+  }
+
+  function removeExtraCharge(index: number) {
+    setExtraCharges(prev => prev.filter((_, i) => i !== index));
+  }
+
   // ── Calculations ──────────────────────────────────────────────
   const calculations = useMemo(() => {
     let subtotal = 0;
@@ -285,15 +312,27 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       }
     }
 
+    // Discount (applied before GST)
+    let computedDiscount = 0;
+    if (discountType === 'percent' && discountValue > 0) {
+      computedDiscount = Math.min((subtotal * discountValue) / 100, subtotal);
+    } else if (discountType === 'fixed' && discountValue > 0) {
+      computedDiscount = Math.min(discountValue, subtotal);
+    }
+    const afterDiscount = subtotal - computedDiscount;
+
+    // GST on discounted subtotal (proportionally reduced)
+    const ratio = subtotal > 0 ? afterDiscount / subtotal : 1;
     const slabs: GSTSlabBreakdown[] = [];
     let totalGST = 0;
 
     Array.from(slabMap.entries()).forEach(([slab, taxableAmount]) => {
-      const totalTax = (taxableAmount * slab) / 100;
+      const adjusted = taxableAmount * ratio;
+      const totalTax = (adjusted * slab) / 100;
       const half = totalTax / 2;
       slabs.push({
         slab,
-        taxableAmount,
+        taxableAmount: adjusted,
         cgst: half,
         sgst: half,
         totalTax,
@@ -303,13 +342,19 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
 
     slabs.sort((a, b) => a.slab - b.slab);
 
+    // Extra charges (added after GST)
+    const ecTotal = extraCharges.reduce((s, ec) => s + (ec.amount || 0), 0);
+
     return {
       subtotal,
+      discountAmount: computedDiscount,
+      afterDiscount,
       slabs,
       totalGST,
-      grandTotal: subtotal + totalGST,
+      extraChargesTotal: ecTotal,
+      grandTotal: afterDiscount + totalGST + ecTotal,
     };
-  }, [items]);
+  }, [items, discountType, discountValue, extraCharges]);
 
   // ── Save bill (via server API to bypass RLS) ──────────────────
   async function handleSave(action: "send" | "print" | "save") {
@@ -355,6 +400,10 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
         subtotal: calculations.subtotal,
         gst_amount: calculations.totalGST,
         total: calculations.grandTotal,
+        discount_type: discountType,
+        discount_value: discountValue,
+        discount_amount: calculations.discountAmount,
+        extra_charges: extraCharges.filter(ec => ec.label.trim() && ec.amount > 0),
         whatsapp_sent: action === "send",
         whatsapp_sent_at: (action === "send") && shop.whatsapp_enabled ? new Date().toISOString() : null,
       };
@@ -514,36 +563,42 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
     setSaving("print");
 
     try {
-      const supabase = createClient();
-      
       const validItems = items.filter(i => i.name && i.qty && i.price)
 
       if (!savedBillId) {
-        const { data: saved, error } = await supabase
-          .from('bills')
-          .insert({
-            client_id: shop?.id,
-            customer_name: customerName.trim(),
-            customer_phone: customerPhone.replace(/\D/g, '').slice(-10),
-            bill_number: billNumber,
-            bill_date: billDate,
-            items: validItems,
-            subtotal: calculations.subtotal || 0,
-            gst_amount: calculations.totalGST || 0,
-            total: calculations.grandTotal || 0,
-            whatsapp_sent: false,
-          })
-          .select('id')
-          .single()
+        const printPayload = {
+          client_id: shop?.id,
+          customer_name: customerName.trim(),
+          customer_phone: customerPhone.replace(/\D/g, '').slice(-10),
+          bill_number: billNumber,
+          bill_date: billDate,
+          items: validItems.map(i => ({ name: i.name.trim(), qty: i.qty, price: i.price, gst_percent: i.gst_percent })),
+          subtotal: calculations.subtotal || 0,
+          gst_amount: calculations.totalGST || 0,
+          total: calculations.grandTotal || 0,
+          discount_type: discountType,
+          discount_value: discountValue,
+          discount_amount: calculations.discountAmount,
+          extra_charges: extraCharges.filter(ec => ec.label.trim() && ec.amount > 0),
+          whatsapp_sent: false,
+        };
 
-        if (error) {
-          alert('Save failed: ' + error.message)
+        const saveRes = await fetch("/api/bills", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ billPayload: printPayload }),
+        });
+        const saveJson = await saveRes.json();
+
+        if (!saveRes.ok) {
+          alert('Save failed: ' + (saveJson.error || 'Unknown error'))
           setSaving(null)
           setIsSaving(false)
           return
         }
-        
-        setSavedBillId(saved.id);
+
+        const billId = saveJson.data?.[0]?.id || printPayload.bill_number;
+        setSavedBillId(billId);
       }
 
       // Build bill HTML as a string — inject into print-area div
@@ -582,15 +637,17 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
           <tbody>${itemRows}</tbody>
         </table>
         <div style="display:flex;justify-content:flex-end">
-          <div style="width:200px;font-size:13px">
+          <div style="width:220px;font-size:13px">
             <div style="display:flex;justify-content:space-between;padding:3px 0;border-top:1px solid #ddd">
               <span>Subtotal</span>
               <span>₹${Number(calculations.subtotal || 0).toFixed(2)}</span>
             </div>
+            ${calculations.discountAmount > 0 ? '<div style="display:flex;justify-content:space-between;padding:3px 0;color:#16a34a"><span>Discount' + (discountType === 'percent' ? ' (' + discountValue + '%)' : '') + '</span><span>-₹' + Number(calculations.discountAmount).toFixed(2) + '</span></div>' : ''}
             <div style="display:flex;justify-content:space-between;padding:3px 0">
               <span>GST</span>
               <span>₹${Number(calculations.totalGST || 0).toFixed(2)}</span>
             </div>
+            ${extraCharges.filter(ec => ec.label && ec.amount > 0).map(ec => '<div style="display:flex;justify-content:space-between;padding:3px 0"><span>' + ec.label + '</span><span>₹' + Number(ec.amount).toFixed(2) + '</span></div>').join('')}
             <div style="display:flex;justify-content:space-between;padding:6px 0;border-top:2px solid #333;font-weight:bold;font-size:15px">
               <span>Total</span>
               <span>₹${Number(calculations.grandTotal || 0).toFixed(2)}</span>
@@ -604,7 +661,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
             <div>
               ${shop?.logo_url
-                ? `<img src="${shop.logo_url}" style="max-height:60px;margin-bottom:8px;display:block" />`
+                ? `<img src="${shop.logo_url}" style="max-height:60px;margin-bottom:8px;display:block;filter:grayscale(100%)" />`
                 : ''}
               <div style="font-size:18px;font-weight:bold">
                 ${shop?.shop_name || ''}
@@ -854,6 +911,9 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
     setCustomerPhone('');
     setPhoneError('');
     setItems([createEmptyItem(shop?.default_gst)]);
+    setDiscountType('none');
+    setDiscountValue(0);
+    setExtraCharges([]);
     setSavedBillId(null);
     setIsSaving(false);
     setSaving(null);
@@ -865,6 +925,9 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
     setCustomerPhone('');
     setPhoneError('');
     setItems([createEmptyItem(shop?.default_gst)]);
+    setDiscountType('none');
+    setDiscountValue(0);
+    setExtraCharges([]);
     setSavedBillId(null);
   }
 
@@ -1274,13 +1337,48 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
               <span className="font-mono">{formatCurrency(calculations.subtotal)}</span>
             </div>
 
+            {/* Discount */}
+            <div className="rounded-md bg-muted/30 p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Label className="text-xs text-muted-foreground whitespace-nowrap">Discount</Label>
+                <Select value={discountType} onValueChange={(v) => { setDiscountType(v as DiscountType); if (v === 'none') setDiscountValue(0); }}>
+                  <SelectTrigger className="h-8 w-[140px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No Discount</SelectItem>
+                    <SelectItem value="percent">Percentage (%)</SelectItem>
+                    <SelectItem value="fixed">Fixed Amount (₹)</SelectItem>
+                  </SelectContent>
+                </Select>
+                {discountType !== 'none' && (
+                  <Input
+                    type="number"
+                    min={0}
+                    max={discountType === 'percent' ? 100 : undefined}
+                    step={discountType === 'percent' ? 1 : 0.01}
+                    value={discountValue || ''}
+                    onChange={(e) => setDiscountValue(Math.max(0, parseFloat(e.target.value) || 0))}
+                    className="h-8 w-[100px] text-right font-mono"
+                    placeholder={discountType === 'percent' ? '10' : '100'}
+                  />
+                )}
+              </div>
+              {calculations.discountAmount > 0 && (
+                <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
+                  <span>Discount {discountType === 'percent' ? `(${discountValue}%)` : ''}</span>
+                  <span className="font-mono">-{formatCurrency(calculations.discountAmount)}</span>
+                </div>
+              )}
+            </div>
+
             <Separator />
 
             {/* GST Breakdown */}
             {calculations.slabs.length > 0 ? (
               <div className="space-y-2">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  GST Breakdown
+                  GST Breakdown {calculations.discountAmount > 0 && '(on discounted amount)'}
                 </p>
                 {calculations.slabs.map((slab) => (
                   <div key={slab.slab} className="rounded-md bg-muted/50 p-3 space-y-1.5">
@@ -1316,6 +1414,49 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
               </div>
             )}
 
+            {/* Extra Charges */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Extra Charges
+                </p>
+                <Button type="button" variant="ghost" size="sm" onClick={addExtraCharge} className="h-7 text-xs">
+                  + Add Charge
+                </Button>
+              </div>
+              {extraCharges.map((ec, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <Input
+                    placeholder="e.g. Delivery, Packaging"
+                    value={ec.label}
+                    onChange={(e) => updateExtraCharge(idx, 'label', e.target.value)}
+                    className="h-8 text-sm flex-1"
+                  />
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-muted-foreground">₹</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      placeholder="0"
+                      value={ec.amount || ''}
+                      onChange={(e) => updateExtraCharge(idx, 'amount', Math.max(0, parseFloat(e.target.value) || 0))}
+                      className="h-8 w-[90px] text-right font-mono"
+                    />
+                  </div>
+                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => removeExtraCharge(idx)}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                  </Button>
+                </div>
+              ))}
+              {calculations.extraChargesTotal > 0 && (
+                <div className="flex justify-between text-sm pt-1">
+                  <span className="text-muted-foreground">Total Extra Charges</span>
+                  <span className="font-mono">{formatCurrency(calculations.extraChargesTotal)}</span>
+                </div>
+              )}
+            </div>
+
             <Separator />
 
             {/* Grand Total */}
@@ -1328,7 +1469,6 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
           </div>
         </CardContent>
       </Card>
-
       {/* Action Buttons */}
       <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-end gap-3 pb-6">
             <Button type="button" variant="outline" onClick={handleClearBill} title="Clear Bill (Alt + C)">

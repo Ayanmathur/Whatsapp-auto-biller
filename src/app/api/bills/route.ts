@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     if (action === "shop") {
       const { data, error } = await adminSupabase
         .from("clients")
-        .select("id, shop_name, shop_address, gst_number, logo_url, bill_size, whatsapp_message_template, owner_phone, products, whatsapp_enabled, default_gst")
+        .select("id, shop_name, shop_address, gst_number, logo_url, bill_size, whatsapp_message_template, owner_phone, products, whatsapp_enabled, default_gst, whatsapp_automation_enabled, whatsapp_api_token, whatsapp_phone_number_id")
         .eq("id", clientId)
         .single();
 

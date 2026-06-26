@@ -627,8 +627,8 @@ export default function SettingsPage() {
             >
               <option value="A4">A4</option>
               <option value="A5">A5</option>
-              <option value="thermal-80mm">Thermal 80mm</option>
-              <option value="thermal-58mm">Thermal 58mm</option>
+              <option value="thermal_80mm">Thermal 80mm</option>
+              <option value="thermal_58mm">Thermal 58mm</option>
             </select>
           </div>
 

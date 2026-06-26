@@ -32,6 +32,10 @@ interface Bill {
   items: Record<string, unknown>[];
   subtotal?: number;
   gst_amount?: number;
+  discount_type?: string;
+  discount_value?: number;
+  discount_amount?: number;
+  extra_charges?: { label: string; amount: number }[];
 }
 
 export function HistoryClient({ clientId }: { clientId?: string }) {
@@ -236,7 +240,7 @@ export function HistoryClient({ clientId }: { clientId?: string }) {
           <div>
             ${(cachedSettings?.logo_url as string)
               ? `<img src="${cachedSettings?.logo_url}" 
-                 style="max-height:60px;margin-bottom:8px;display:block"/>`
+                 style="max-height:60px;margin-bottom:8px;display:block;filter:grayscale(100%)"/>`
               : ''}
             <div style="font-size:18px;font-weight:bold">
               ${(cachedSettings?.shop_name as string) || ''}
@@ -282,17 +286,19 @@ export function HistoryClient({ clientId }: { clientId?: string }) {
             <tbody>${itemRows}</tbody>
           </table>
           <div style="display:flex;justify-content:flex-end">
-            <div style="width:200px;font-size:13px">
+            <div style="width:220px;font-size:13px">
               <div style="display:flex;justify-content:space-between;
                 padding:3px 0;border-top:1px solid #ddd">
                 <span>Subtotal</span>
                 <span>₹${Number(bill.subtotal||0).toFixed(2)}</span>
               </div>
+              ${(bill.discount_amount && bill.discount_amount > 0) ? '<div style="display:flex;justify-content:space-between;padding:3px 0;color:#16a34a"><span>Discount' + (bill.discount_type === 'percent' ? ' (' + (bill.discount_value||0) + '%)' : '') + '</span><span>-₹' + Number(bill.discount_amount).toFixed(2) + '</span></div>' : ''}
               <div style="display:flex;justify-content:space-between;
                 padding:3px 0">
                 <span>GST</span>
                 <span>₹${Number(bill.gst_amount||0).toFixed(2)}</span>
               </div>
+              ${(bill.extra_charges && bill.extra_charges.length > 0) ? bill.extra_charges.filter(ec => ec.label && ec.amount > 0).map(ec => '<div style="display:flex;justify-content:space-between;padding:3px 0"><span>' + ec.label + '</span><span>₹' + Number(ec.amount).toFixed(2) + '</span></div>').join('') : ''}
               <div style="display:flex;justify-content:space-between;
                 padding:6px 0;border-top:2px solid #333;
                 font-weight:bold;font-size:15px">

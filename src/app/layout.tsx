@@ -5,8 +5,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 
 export const metadata: Metadata = {
-  title: "Billing System",
-  description: "Professional billing and invoice management system",
+  title: "Bill Door",
+  description: "Professional billing, invoicing & WhatsApp automation",
 };
 
 export default function RootLayout({
