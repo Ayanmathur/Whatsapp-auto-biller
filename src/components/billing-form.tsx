@@ -870,7 +870,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
   // Wire the hardware scanner hook
   useHardwareScanner({
     onScan: handleHardwareScan,
-    enabled: hardwareScannerEnabled,
+    enabled: true,
     minLength: 4,
     maxGap: 50,
   });
