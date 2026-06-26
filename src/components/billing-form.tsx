@@ -120,6 +120,15 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
   // Items
   const [items, setItems] = useState<LineItem[]>([createEmptyItem()]);
 
+  // Autocomplete products
+  interface AutocompleteProduct {
+    id: string;
+    name: string;
+    price: number;
+    gst_percent: number;
+  }
+  const [dbProducts, setDbProducts] = useState<AutocompleteProduct[]>([]);
+
   // Hardware scanner
   const [manualBarcode, setManualBarcode] = useState('');
 
@@ -151,6 +160,12 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
           ...item,
           gst_percent: item.gst_percent === 0 ? (shopData.default_gst || 0) : item.gst_percent
         })));
+        
+        const supabase = createClient();
+        const { data: pData } = await supabase.from('products').select('id, name, price, gst_percent').eq('client_id', shopData.id);
+        if (pData) {
+          setDbProducts(pData as AutocompleteProduct[]);
+        }
       }
     } catch (err) {
       console.error("Failed to load shop info:", err);
@@ -248,17 +263,25 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
   }
 
   // ── Item handlers ─────────────────────────────────────────────
-  function updateItem<K extends keyof LineItem>(
-    itemId: string,
-    field: K,
-    value: LineItem[K]
-  ) {
-    setItems((prev) =>
-      prev.map((item) =>
-        item.id === itemId ? { ...item, [field]: value } : item
-      )
-    );
-  }
+  const updateItem = useCallback(
+    (id: string, field: keyof LineItem, value: string | number) => {
+      setItems((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, [field]: value } : i))
+      );
+    },
+    []
+  );
+
+  const handleItemNameChange = useCallback((itemId: string, value: string) => {
+    updateItem(itemId, "name", value);
+    const prod = dbProducts.find(p => p.name.toLowerCase() === value.toLowerCase());
+    if (prod) {
+      updateItem(itemId, "price", prod.price || 0);
+      if (prod.gst_percent !== undefined) {
+        updateItem(itemId, "gst_percent", prod.gst_percent || 0);
+      }
+    }
+  }, [dbProducts, updateItem]);
 
   function addItem() {
     setItems((prev) => [...prev, createEmptyItem()]);
@@ -1087,6 +1110,12 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
           </Button>
         </CardHeader>
         <CardContent>
+          <datalist id="products-list">
+            {dbProducts.map((p) => (
+              <option key={p.id} value={p.name} />
+            ))}
+          </datalist>
+
           {/* Desktop Table */}
           <div className="hidden md:block rounded-md border">
             <Table>
@@ -1112,28 +1141,11 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
                       <TableCell>
                         <Input
                           placeholder="Item name"
-                          list={`products-list-${item.id}`}
+                          list="products-list"
                           value={item.name}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            updateItem(item.id, "name", val);
-                            if (shop?.products) {
-                              const prod = shop.products.find(p => p.name === val);
-                              if (prod) {
-                                updateItem(item.id, "price", prod.price);
-                                if (prod.gst_percent !== undefined) {
-                                  updateItem(item.id, "gst_percent", prod.gst_percent);
-                                }
-                              }
-                            }
-                          }}
+                          onChange={(e) => handleItemNameChange(item.id, e.target.value)}
                           className="h-9"
                         />
-                        <datalist id={`products-list-${item.id}`}>
-                          {shop?.products?.map((p, idx) => (
-                            <option key={idx} value={p.name} />
-                          ))}
-                        </datalist>
                       </TableCell>
                       <TableCell>
                         <Input
@@ -1249,8 +1261,9 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
                   </div>
                   <Input
                     placeholder="Item name"
+                    list="products-list"
                     value={item.name}
-                    onChange={(e) => updateItem(item.id, "name", e.target.value)}
+                    onChange={(e) => handleItemNameChange(item.id, e.target.value)}
                   />
                   <div className="grid grid-cols-3 gap-2">
                     <div className="space-y-1">

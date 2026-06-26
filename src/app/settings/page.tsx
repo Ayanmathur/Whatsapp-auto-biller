@@ -258,6 +258,23 @@ export default function SettingsPage() {
     return prefix + timestamp + random
   }
 
+  function downloadBarcodeImage(product: SettingsProduct) {
+    const canvas = document.createElement('canvas')
+    JsBarcode(canvas, product.barcode_value || '', {
+      format: 'CODE128',
+      width: 2, height: 60,
+      displayValue: true, fontSize: 12,
+      margin: 8, background: '#ffffff',
+    })
+    const barcodeDataUrl = canvas.toDataURL('image/png')
+    const a = document.createElement('a')
+    a.href = barcodeDataUrl
+    a.download = `barcode-${product.barcode_value}.png`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  }
+
   function printProductLabel(product: SettingsProduct) {
     const canvas = document.createElement('canvas')
     JsBarcode(canvas, product.barcode_value || '', {
@@ -1175,9 +1192,24 @@ export default function SettingsPage() {
                         border: 'none', borderRadius: 6,
                         padding: '5px 12px', fontSize: 12,
                         cursor: 'pointer', fontWeight: 500,
+                        marginRight: 8,
                       }}
                     >
                       🖨️ Print Label
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => downloadBarcodeImage(product)}
+                      style={{
+                        background: 'transparent',
+                        color: c.accent,
+                        border: '1px solid ' + c.accent,
+                        borderRadius: 6, padding: '5px 12px',
+                        fontSize: 12, cursor: 'pointer',
+                        marginRight: 8,
+                      }}
+                    >
+                      💾 Save Image
                     </button>
                     <button
                       type="button"
