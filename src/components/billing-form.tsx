@@ -1112,7 +1112,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
         </CardHeader>
         <CardContent>
           {/* Desktop Table */}
-          <div className="hidden md:block rounded-md border">
+          <div className="hidden md:block rounded-md border [&>div]:overflow-visible">
             <Table>
               <TableHeader>
                 <TableRow>
