@@ -6,6 +6,7 @@ import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import type { BillSize, ProductEntry } from "@/types/database";
+import { useHardwareScanner } from "@/hooks/useHardwareScanner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -59,6 +60,12 @@ interface LineItem {
   qty: number;
   price: number;
   gst_percent: number;
+  barcode?: string;
+}
+
+interface ScanFeedback {
+  type: 'success' | 'error';
+  message: string;
 }
 
 interface GSTSlabBreakdown {
@@ -116,6 +123,11 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
 
   // Items
   const [items, setItems] = useState<LineItem[]>([createEmptyItem()]);
+
+  // Hardware scanner
+  const [hardwareScannerEnabled, setHardwareScannerEnabled] = useState(true);
+  const [lastScanFeedback, setLastScanFeedback] = useState<ScanFeedback | null>(null);
+  const [manualBarcode, setManualBarcode] = useState('');
 
   // Saving
   const [saving, setSaving] = useState<string | null>(null);
@@ -756,6 +768,70 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [theme, setTheme]);
 
+  // ── Hardware Scanner ──────────────────────────────────────────
+  async function handleHardwareScan(barcodeValue: string) {
+    if (!shop?.id) return;
+
+    const supabase = createClient();
+
+    // Look up product in Supabase
+    const { data: product, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('barcode_value', barcodeValue)
+      .eq('client_id', shop.id)
+      .single();
+
+    if (error || !product) {
+      setLastScanFeedback({
+        type: 'error',
+        message: `❌ Unknown barcode: ${barcodeValue}`,
+      });
+      setTimeout(() => setLastScanFeedback(null), 3000);
+      return;
+    }
+
+    // Add to items — increment qty if already in list
+    setItems(prev => {
+      const existingIndex = prev.findIndex(
+        i => i.barcode === barcodeValue
+      );
+      if (existingIndex >= 0) {
+        const updated = [...prev];
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          qty: (Number(updated[existingIndex].qty) || 1) + 1,
+        };
+        return updated;
+      }
+      return [
+        ...prev.filter(i => i.name),
+        {
+          id: generateItemId(),
+          name: product.name,
+          qty: 1,
+          price: product.price,
+          gst_percent: product.gst_percent || 0,
+          barcode: barcodeValue,
+        },
+      ];
+    });
+
+    setLastScanFeedback({
+      type: 'success',
+      message: `✅ ${product.name} — ₹${product.price}`,
+    });
+    setTimeout(() => setLastScanFeedback(null), 2000);
+  }
+
+  // Wire the hardware scanner hook
+  useHardwareScanner({
+    onScan: handleHardwareScan,
+    enabled: hardwareScannerEnabled,
+    minLength: 4,
+    maxGap: 50,
+  });
+
   // ── Loading state ─────────────────────────────────────────────
   if (loadingShop) {
     return (
@@ -845,6 +921,110 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
           </div>
         </CardContent>
       </Card>
+
+      {/* Hardware Scanner Status Bar */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '10px 14px',
+        background: hardwareScannerEnabled ? '#f0fdf4' : '#f9fafb',
+        border: '1px solid ' + (hardwareScannerEnabled ? '#86efac' : '#e5e7eb'),
+        borderRadius: 10,
+        marginBottom: 14,
+      }}>
+        <div style={{display:'flex', alignItems:'center', gap:10}}>
+          <span style={{fontSize:18}}>
+            {hardwareScannerEnabled ? '🟢' : '⚫'}
+          </span>
+          <div>
+            <div style={{fontSize:13, fontWeight:600,
+              color: hardwareScannerEnabled ? '#166534' : '#6b7280'}}>
+              {hardwareScannerEnabled
+                ? 'Hardware Scanner Active — scan any product now'
+                : 'Hardware Scanner Disabled'}
+            </div>
+            {lastScanFeedback && (
+              <div style={{fontSize:12, marginTop:2,
+                color: lastScanFeedback.type === 'success'
+                  ? '#16a34a' : '#dc2626'}}>
+                {lastScanFeedback.message}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div style={{display:'flex', alignItems:'center', gap:8}}>
+          {/* Mobile QR session (existing) */}
+          <div style={{fontSize:11, color:'#6b7280'}}>
+            📱 Mobile
+          </div>
+
+          {/* Toggle hardware scanner */}
+          <div
+            onClick={() => setHardwareScannerEnabled(prev => !prev)}
+            title={hardwareScannerEnabled
+              ? 'Disable hardware scanner'
+              : 'Enable hardware scanner'}
+            style={{
+              width: 40, height: 22, borderRadius: 11,
+              background: hardwareScannerEnabled ? '#22c55e' : '#d1d5db',
+              position: 'relative', cursor: 'pointer',
+              transition: 'background 0.2s',
+              flexShrink: 0,
+            }}
+          >
+            <div style={{
+              position: 'absolute',
+              top: 2,
+              left: hardwareScannerEnabled ? 20 : 2,
+              width: 18, height: 18, borderRadius: '50%',
+              background: 'white',
+              transition: 'left 0.2s',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+            }} />
+          </div>
+        </div>
+      </div>
+
+      {/* Manual Barcode Input */}
+      <div style={{display:'flex', gap:8, marginBottom:14}}>
+        <input
+          data-scanner-input="true"
+          type="text"
+          placeholder="Or type / scan barcode here..."
+          value={manualBarcode}
+          onChange={e => setManualBarcode(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && manualBarcode.trim()) {
+              handleHardwareScan(manualBarcode.trim());
+              setManualBarcode('');
+            }
+          }}
+          style={{
+            flex: 1, padding: '8px 12px',
+            border: '1px solid #d1d5db', borderRadius: 8,
+            fontSize: 13, outline: 'none',
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => {
+            if (manualBarcode.trim()) {
+              handleHardwareScan(manualBarcode.trim());
+              setManualBarcode('');
+            }
+          }}
+          style={{
+            background: '#2563eb', color: 'white',
+            border: 'none', borderRadius: 8,
+            padding: '8px 14px', fontSize: 13,
+            cursor: 'pointer', whiteSpace: 'nowrap',
+          }}
+        >
+          Add Item
+        </button>
+      </div>
 
       {/* Customer Details */}
       <Card>
