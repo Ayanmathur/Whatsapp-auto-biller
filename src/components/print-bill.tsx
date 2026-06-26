@@ -167,7 +167,7 @@ export function PrintBill({ data, previewMode = false }: { data: PrintBillData |
           </div>
         ) : (
           /* A4 / A5 — full table */
-          <table className="bill-items-table">
+          <table className="bill-items-table w-full mb-4">
             <thead>
               <tr>
                 <th className="text-left">#</th>
