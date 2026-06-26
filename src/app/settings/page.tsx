@@ -1087,7 +1087,7 @@ export default function SettingsPage() {
                           type="button"
                           onClick={() => handleUpdateStock(
                             product.id,
-                            Math.max(0, product.stock - 1)
+                            Math.max(0, Number(product.stock || 0) - 1)
                           )}
                           style={{
                             width: 22, height: 22,
@@ -1104,7 +1104,7 @@ export default function SettingsPage() {
                         </button>
                         <span style={{
                           fontSize: 13, fontWeight: 600,
-                          color: product.stock <= 5
+                          color: Number(product.stock || 0) <= 5
                             ? '#ef4444' : c.text,
                           minWidth: 24, textAlign: 'center',
                         }}>
@@ -1113,7 +1113,7 @@ export default function SettingsPage() {
                         <button
                           type="button"
                           onClick={() => handleUpdateStock(
-                            product.id, product.stock + 1
+                            product.id, Number(product.stock || 0) + 1
                           )}
                           style={{
                             width: 22, height: 22,
@@ -1128,7 +1128,7 @@ export default function SettingsPage() {
                         >
                           +
                         </button>
-                        {product.stock <= 5 && product.stock > 0 && (
+                        {Number(product.stock || 0) <= 5 && Number(product.stock || 0) > 0 && (
                           <span style={{
                             fontSize: 10, color: '#f59e0b',
                             fontWeight: 600,
@@ -1136,7 +1136,7 @@ export default function SettingsPage() {
                             ⚠️ Low
                           </span>
                         )}
-                        {product.stock === 0 && (
+                        {Number(product.stock || 0) === 0 && (
                           <span style={{
                             fontSize: 10, color: '#ef4444',
                             fontWeight: 600,
