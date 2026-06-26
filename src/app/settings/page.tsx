@@ -3,6 +3,50 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useTheme } from 'next-themes'
+import JsBarcode from 'jsbarcode'
+
+// ── Barcode Display Component ──
+function BarcodeDisplay({
+  value,
+  height = 50,
+  fontSize = 10,
+}: {
+  value: string
+  height?: number
+  fontSize?: number
+}) {
+  const svgRef = useRef<SVGSVGElement>(null)
+
+  useEffect(() => {
+    if (svgRef.current && value) {
+      try {
+        JsBarcode(svgRef.current, value, {
+          format: 'CODE128',
+          width: 1.8,
+          height,
+          displayValue: true,
+          fontSize,
+          margin: 6,
+          background: '#ffffff',
+          lineColor: '#000000',
+        })
+      } catch (err) {
+        console.error('Barcode error:', err)
+      }
+    }
+  }, [value, height, fontSize])
+
+  return (
+    <svg
+      ref={svgRef}
+      style={{
+        display: 'block',
+        background: 'white',
+        borderRadius: 4,
+      }}
+    />
+  )
+}
 
 export default function SettingsPage() {
   const supabase = createClient()
@@ -10,7 +54,7 @@ export default function SettingsPage() {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [clientId, setClientId] = useState(null)
+  const [clientId, setClientId] = useState<string | null>(null)
   const [charCount, setCharCount] = useState(0)
 
   const { theme, setTheme } = useTheme()
@@ -30,6 +74,23 @@ export default function SettingsPage() {
     whatsapp_phone_number_id: '',
     whatsapp_message_template: '',
   })
+
+  // ── Products state ──
+  const [products, setProducts] = useState<any[]>([])
+  const [showAddProduct, setShowAddProduct] = useState(false)
+  const [productSearch, setProductSearch] = useState('')
+  const [savingProduct, setSavingProduct] = useState(false)
+
+  const emptyProduct = {
+    name: '',
+    size: '',
+    unit: 'pcs',
+    combo_units: '1',
+    price: '',
+    gst_percent: '0',
+    stock: '',
+  }
+  const [newProduct, setNewProduct] = useState(emptyProduct)
 
   // ── Theme tokens ──
   const t = {
@@ -59,6 +120,7 @@ export default function SettingsPage() {
   const currentTheme = mounted && theme === 'dark' ? 'dark' : 'light'
   const c = t[currentTheme]
 
+  // ── Load settings + products ──
   useEffect(() => {
     async function load() {
       try {
@@ -88,6 +150,15 @@ export default function SettingsPage() {
           setCharCount(
             (data.whatsapp_message_template || '').length
           )
+
+          // Load products
+          const { data: productData } = await supabase
+            .from('products')
+            .select('*')
+            .eq('client_id', data.id)
+            .order('created_at', { ascending: false })
+
+          if (productData) setProducts(productData)
         }
       } catch (err) {
         console.error('Load error:', err)
@@ -96,6 +167,7 @@ export default function SettingsPage() {
       }
     }
     load()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function update(field: string, value: string | boolean) {
@@ -166,6 +238,163 @@ export default function SettingsPage() {
     setTheme(theme === 'dark' ? 'light' : 'dark')
   }
 
+  // ── Product functions ──
+  function generateBarcodeValue(cId: string): string {
+    const prefix = cId.slice(0, 6).toUpperCase().replace(/-/g, '')
+    const timestamp = Date.now().toString().slice(-7)
+    const random = Math.floor(Math.random() * 999)
+      .toString().padStart(3, '0')
+    return prefix + timestamp + random
+  }
+
+  function printProductLabel(product: any) {
+    const canvas = document.createElement('canvas')
+    JsBarcode(canvas, product.barcode_value, {
+      format: 'CODE128',
+      width: 2, height: 60,
+      displayValue: true, fontSize: 12,
+      margin: 8, background: '#ffffff',
+    })
+    const barcodeDataUrl = canvas.toDataURL('image/png')
+
+    const label = document.createElement('div')
+    label.id = 'product-label-print'
+    label.innerHTML = `
+      <div style="font-family:Arial;text-align:center;
+        padding:8mm;width:60mm;box-sizing:border-box">
+        <div style="font-size:13px;font-weight:bold;
+          margin-bottom:3px;line-height:1.3">
+          ${product.name}
+          ${product.size ? ' — ' + product.size : ''}
+        </div>
+        ${product.unit !== 'pcs' || product.combo_units > 1
+          ? `<div style="font-size:10px;color:#555;margin-bottom:3px">
+               ${product.combo_units} ${product.unit}
+             </div>`
+          : ''
+        }
+        <div style="font-size:14px;font-weight:bold;
+          color:#111;margin-bottom:6px">
+          ₹${Number(product.price).toFixed(2)}
+        </div>
+        <img src="${barcodeDataUrl}"
+          style="width:100%;max-width:52mm"/>
+      </div>
+    `
+    document.body.appendChild(label)
+
+    const style = document.createElement('style')
+    style.id = 'product-label-style'
+    style.innerHTML = `
+      @media print {
+        body > *:not(#product-label-print) {
+          display: none !important;
+        }
+        #product-label-print {
+          display: block !important;
+          position: fixed !important;
+          top: 0 !important; left: 0 !important;
+        }
+        @page {
+          margin: 0;
+          size: 62mm 40mm;
+        }
+      }
+    `
+    document.head.appendChild(style)
+
+    setTimeout(() => {
+      window.print()
+      window.onafterprint = () => {
+        document.getElementById('product-label-print')?.remove()
+        document.getElementById('product-label-style')?.remove()
+        window.onafterprint = null
+      }
+      setTimeout(() => {
+        document.getElementById('product-label-print')?.remove()
+        document.getElementById('product-label-style')?.remove()
+      }, 30000)
+    }, 150)
+  }
+
+  async function handleSaveProduct() {
+    if (!newProduct.name.trim()) {
+      alert('Product name is required')
+      return
+    }
+    if (!newProduct.price || Number(newProduct.price) <= 0) {
+      alert('Enter a valid price')
+      return
+    }
+    if (!clientId) {
+      alert('Settings not loaded yet. Try again.')
+      return
+    }
+
+    setSavingProduct(true)
+
+    const barcodeValue = generateBarcodeValue(clientId)
+
+    const payload = {
+      client_id: clientId,
+      name: newProduct.name.trim(),
+      size: newProduct.size.trim() || null,
+      unit: newProduct.unit,
+      combo_units: Number(newProduct.combo_units) || 1,
+      price: Number(newProduct.price),
+      gst_percent: Number(newProduct.gst_percent) || 0,
+      stock: Number(newProduct.stock) || 0,
+      barcode_value: barcodeValue,
+    }
+
+    const { data, error } = await supabase
+      .from('products')
+      .insert(payload)
+      .select()
+      .single()
+
+    if (error) {
+      alert('Failed to save product: ' + error.message)
+      setSavingProduct(false)
+      return
+    }
+
+    setProducts(prev => [data, ...prev])
+    setNewProduct(emptyProduct)
+    setShowAddProduct(false)
+    setSavingProduct(false)
+  }
+
+  async function handleDeleteProduct(productId: string) {
+    if (!confirm('Delete this product? This cannot be undone.')) {
+      return
+    }
+    const { error } = await supabase
+      .from('products')
+      .delete()
+      .eq('id', productId)
+
+    if (error) {
+      alert('Delete failed: ' + error.message)
+      return
+    }
+    setProducts(prev => prev.filter(p => p.id !== productId))
+  }
+
+  async function handleUpdateStock(
+    productId: string,
+    newStock: number
+  ) {
+    await supabase
+      .from('products')
+      .update({ stock: newStock })
+      .eq('id', productId)
+
+    setProducts(prev => prev.map(p =>
+      p.id === productId ? { ...p, stock: newStock } : p
+    ))
+  }
+
   // ── Shared styles ──
   const card: React.CSSProperties = {
     background: c.surface,
@@ -191,6 +420,7 @@ export default function SettingsPage() {
     background: c.inputBg,
     color: c.text,
     outline: 'none',
+    marginBottom: 10,
   }
   const sectionTitle: React.CSSProperties = {
     fontSize: 15,
@@ -284,6 +514,46 @@ export default function SettingsPage() {
 
       {/* Content */}
       <div style={{ maxWidth: 680, margin: '32px auto', padding: '0 20px' }}>
+
+        {/* ── Hardware Scanner Status ── */}
+        <div style={{
+          background: c.surface,
+          border: '1px solid ' + c.border,
+          borderRadius: 12, padding: '16px 20px',
+          marginBottom: 20,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}>
+          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{
+              width: 10, height: 10, borderRadius: '50%',
+              background: '#22c55e',
+              boxShadow: '0 0 6px #22c55e',
+              flexShrink: 0,
+            }} />
+            <div>
+              <div style={{
+                fontSize: 14, fontWeight: 600, color: c.text,
+              }}>
+                Hardware Barcode Scanner
+              </div>
+              <div style={{ fontSize: 12, color: c.textSub, marginTop: 2 }}>
+                Plug in any USB or Bluetooth barcode scanner —
+                works automatically on the billing page.
+                No drivers needed.
+              </div>
+            </div>
+          </div>
+          <div style={{
+            background: '#f0fdf4', border: '1px solid #86efac',
+            borderRadius: 20, padding: '4px 12px',
+            fontSize: 11, fontWeight: 600, color: '#166534',
+            flexShrink: 0, marginLeft: 12,
+          }}>
+            Auto-detected
+          </div>
+        </div>
 
         {/* ── Business Information ── */}
         <div style={card}>
@@ -423,7 +693,7 @@ export default function SettingsPage() {
                   >
                     Remove
                   </button>
-                  
+
                   <a
                     href={settings.logo_url}
                     target="_blank"
@@ -482,6 +752,446 @@ export default function SettingsPage() {
               added to your bills.
             </div>
           </div>
+        </div>
+
+        {/* ── Products & Barcodes ── */}
+        <div style={card}>
+
+          {/* Section header */}
+          <div style={{
+            display: 'flex', justifyContent: 'space-between',
+            alignItems: 'flex-start', marginBottom: 4,
+          }}>
+            <div>
+              <div style={sectionTitle}>Products & Barcodes</div>
+              <div style={sectionSub}>
+                Add products with auto-generated barcodes.
+                Scan barcodes on the billing page to add
+                items instantly.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setShowAddProduct(prev => !prev)
+                setNewProduct(emptyProduct)
+              }}
+              style={{
+                background: showAddProduct
+                  ? 'transparent' : c.accent,
+                color: showAddProduct ? c.textSub : 'white',
+                border: showAddProduct
+                  ? '1px solid ' + c.border : 'none',
+                borderRadius: 8,
+                padding: '8px 16px', fontSize: 13,
+                cursor: 'pointer', fontWeight: 500,
+                flexShrink: 0, marginLeft: 12,
+              }}
+            >
+              {showAddProduct ? '✕ Cancel' : '+ Add Product'}
+            </button>
+          </div>
+
+          {/* Add product form */}
+          {showAddProduct && (
+            <div style={{
+              background: c.surfaceAlt,
+              border: '1px solid ' + c.border,
+              borderRadius: 10, padding: '16px',
+              marginBottom: 16,
+            }}>
+              <div style={{
+                fontSize: 13, fontWeight: 600,
+                color: c.text, marginBottom: 12,
+              }}>
+                New Product
+              </div>
+
+              {/* Row 1: Name + Size */}
+              <div style={{ display:'flex', gap:10 }}>
+                <div style={{ flex: 2 }}>
+                  <label style={{ ...labelStyle, fontSize: 12 }}>
+                    Product Name *
+                  </label>
+                  <input
+                    style={inputStyle}
+                    type="text"
+                    placeholder="e.g. Basmati Rice"
+                    value={newProduct.name}
+                    onChange={e => setNewProduct(p => ({
+                      ...p, name: e.target.value
+                    }))}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ ...labelStyle, fontSize: 12 }}>
+                    Size / Variant
+                  </label>
+                  <input
+                    style={inputStyle}
+                    type="text"
+                    placeholder="e.g. 5kg, 500ml"
+                    value={newProduct.size}
+                    onChange={e => setNewProduct(p => ({
+                      ...p, size: e.target.value
+                    }))}
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: Unit + Combo qty + Stock */}
+              <div style={{ display:'flex', gap:10 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ ...labelStyle, fontSize: 12 }}>
+                    Unit
+                  </label>
+                  <select
+                    style={{ ...inputStyle, cursor:'pointer' }}
+                    value={newProduct.unit}
+                    onChange={e => setNewProduct(p => ({
+                      ...p, unit: e.target.value
+                    }))}
+                  >
+                    <option value="pcs">pcs</option>
+                    <option value="kg">kg</option>
+                    <option value="g">g</option>
+                    <option value="litre">litre</option>
+                    <option value="ml">ml</option>
+                    <option value="box">box</option>
+                    <option value="pack">pack</option>
+                    <option value="dozen">dozen</option>
+                    <option value="pair">pair</option>
+                    <option value="set">set</option>
+                    <option value="combo">combo</option>
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ ...labelStyle, fontSize: 12 }}>
+                    Qty in combo
+                  </label>
+                  <input
+                    style={inputStyle}
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 6"
+                    value={newProduct.combo_units}
+                    onChange={e => setNewProduct(p => ({
+                      ...p, combo_units: e.target.value
+                    }))}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ ...labelStyle, fontSize: 12 }}>
+                    Stock
+                  </label>
+                  <input
+                    style={inputStyle}
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={newProduct.stock}
+                    onChange={e => setNewProduct(p => ({
+                      ...p, stock: e.target.value
+                    }))}
+                  />
+                </div>
+              </div>
+
+              {/* Row 3: Price + GST */}
+              <div style={{ display:'flex', gap:10 }}>
+                <div style={{ flex: 2 }}>
+                  <label style={{ ...labelStyle, fontSize: 12 }}>
+                    Price (₹) *
+                  </label>
+                  <input
+                    style={inputStyle}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={newProduct.price}
+                    onChange={e => setNewProduct(p => ({
+                      ...p, price: e.target.value
+                    }))}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ ...labelStyle, fontSize: 12 }}>
+                    GST %
+                  </label>
+                  <select
+                    style={{ ...inputStyle, cursor:'pointer' }}
+                    value={newProduct.gst_percent}
+                    onChange={e => setNewProduct(p => ({
+                      ...p, gst_percent: e.target.value
+                    }))}
+                  >
+                    <option value="0">0%</option>
+                    <option value="5">5%</option>
+                    <option value="12">12%</option>
+                    <option value="18">18%</option>
+                    <option value="28">28%</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Preview barcode */}
+              <div style={{
+                background: 'white', borderRadius: 8,
+                padding: '10px 14px', border: '1px solid ' + c.border,
+                marginBottom: 12,
+              }}>
+                <div style={{ fontSize: 11, color: '#9ca3af',
+                  marginBottom: 4 }}>
+                  Barcode preview (auto-generated on save):
+                </div>
+                <BarcodeDisplay
+                  value="PREVIEW123456789"
+                  height={40}
+                  fontSize={9}
+                />
+                <div style={{ fontSize: 10, color: '#9ca3af',
+                  marginTop: 3 }}>
+                  Your product will get a unique barcode like this
+                </div>
+              </div>
+
+              {/* Save button */}
+              <button
+                type="button"
+                onClick={handleSaveProduct}
+                disabled={savingProduct}
+                style={{
+                  background: savingProduct ? '#93c5fd' : c.accent,
+                  color: 'white', border: 'none',
+                  borderRadius: 8, padding: '10px 20px',
+                  fontSize: 13, fontWeight: 600,
+                  cursor: savingProduct ? 'not-allowed' : 'pointer',
+                  width: '100%',
+                }}
+              >
+                {savingProduct
+                  ? '⏳ Saving...'
+                  : '✅ Save Product & Generate Barcode'}
+              </button>
+            </div>
+          )}
+
+          {/* Search bar */}
+          {products.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <input
+                style={{
+                  ...inputStyle,
+                  marginBottom: 0,
+                  background: c.inputBg,
+                }}
+                type="text"
+                placeholder="🔍 Search products..."
+                value={productSearch}
+                onChange={e => setProductSearch(e.target.value)}
+              />
+            </div>
+          )}
+
+          {/* Product count */}
+          <div style={{
+            fontSize: 12, color: c.textSub, marginBottom: 10,
+          }}>
+            {products.length} product{products.length !== 1
+              ? 's' : ''} in catalogue
+          </div>
+
+          {/* Products list */}
+          {products.length === 0 ? (
+            <div style={{
+              textAlign: 'center', padding: '32px 20px',
+              color: c.textSub,
+            }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>📦</div>
+              <div style={{ fontSize: 13, fontWeight: 500 }}>
+                No products yet
+              </div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>
+                Add your first product to generate its barcode
+              </div>
+            </div>
+          ) : (
+            products
+              .filter(p => {
+                const q = productSearch.toLowerCase()
+                return !q ||
+                  p.name.toLowerCase().includes(q) ||
+                  (p.size || '').toLowerCase().includes(q) ||
+                  p.barcode_value.toLowerCase().includes(q)
+              })
+              .map((product: any) => (
+                <div key={product.id} style={{
+                  background: c.surfaceAlt,
+                  border: '1px solid ' + c.border,
+                  borderRadius: 10, padding: '14px',
+                  marginBottom: 10,
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    gap: 12,
+                    flexWrap: 'wrap',
+                  }}>
+
+                    {/* Product info */}
+                    <div style={{ flex: 1, minWidth: 180 }}>
+                      <div style={{
+                        fontSize: 14, fontWeight: 700,
+                        color: c.text, marginBottom: 2,
+                      }}>
+                        {product.name}
+                        {product.size
+                          ? ` — ${product.size}` : ''}
+                      </div>
+                      <div style={{
+                        fontSize: 12, color: c.textSub,
+                        marginBottom: 4,
+                      }}>
+                        {product.combo_units > 1
+                          ? `${product.combo_units} ${product.unit} `
+                          : `${product.unit} `}
+                        · ₹{Number(product.price).toFixed(2)}
+                        · GST {product.gst_percent}%
+                      </div>
+
+                      {/* Stock control */}
+                      <div style={{
+                        display: 'flex', alignItems: 'center',
+                        gap: 6, marginTop: 4,
+                      }}>
+                        <span style={{
+                          fontSize: 11, color: c.textSub,
+                        }}>
+                          Stock:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateStock(
+                            product.id,
+                            Math.max(0, product.stock - 1)
+                          )}
+                          style={{
+                            width: 22, height: 22,
+                            border: '1px solid ' + c.border,
+                            borderRadius: 4, cursor: 'pointer',
+                            background: c.surface, color: c.text,
+                            fontSize: 14, display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: 0,
+                          }}
+                        >
+                          −
+                        </button>
+                        <span style={{
+                          fontSize: 13, fontWeight: 600,
+                          color: product.stock <= 5
+                            ? '#ef4444' : c.text,
+                          minWidth: 24, textAlign: 'center',
+                        }}>
+                          {product.stock}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateStock(
+                            product.id, product.stock + 1
+                          )}
+                          style={{
+                            width: 22, height: 22,
+                            border: '1px solid ' + c.border,
+                            borderRadius: 4, cursor: 'pointer',
+                            background: c.surface, color: c.text,
+                            fontSize: 14, display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: 0,
+                          }}
+                        >
+                          +
+                        </button>
+                        {product.stock <= 5 && product.stock > 0 && (
+                          <span style={{
+                            fontSize: 10, color: '#f59e0b',
+                            fontWeight: 600,
+                          }}>
+                            ⚠️ Low
+                          </span>
+                        )}
+                        {product.stock === 0 && (
+                          <span style={{
+                            fontSize: 10, color: '#ef4444',
+                            fontWeight: 600,
+                          }}>
+                            ❌ Out of stock
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Barcode */}
+                    <div style={{
+                      background: 'white', borderRadius: 8,
+                      padding: '8px 10px',
+                      border: '1px solid #e5e7eb',
+                      flexShrink: 0,
+                    }}>
+                      <BarcodeDisplay
+                        value={product.barcode_value}
+                        height={44}
+                        fontSize={9}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Action buttons */}
+                  <div style={{
+                    display: 'flex', gap: 6,
+                    marginTop: 10, flexWrap: 'wrap',
+                  }}>
+                    <button
+                      type="button"
+                      onClick={() => printProductLabel(product)}
+                      style={{
+                        background: '#2563eb', color: 'white',
+                        border: 'none', borderRadius: 6,
+                        padding: '5px 12px', fontSize: 12,
+                        cursor: 'pointer', fontWeight: 500,
+                      }}
+                    >
+                      🖨️ Print Label
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteProduct(product.id)}
+                      style={{
+                        background: 'transparent',
+                        color: '#ef4444',
+                        border: '1px solid #ef4444',
+                        borderRadius: 6, padding: '5px 12px',
+                        fontSize: 12, cursor: 'pointer',
+                      }}
+                    >
+                      🗑️ Delete
+                    </button>
+                    <div style={{
+                      marginLeft: 'auto',
+                      fontSize: 10, color: c.textSub,
+                      alignSelf: 'center',
+                      fontFamily: 'monospace',
+                    }}>
+                      {product.barcode_value}
+                    </div>
+                  </div>
+                </div>
+              ))
+          )}
         </div>
 
         {/* ── WhatsApp Settings ── */}
