@@ -610,7 +610,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
           break;
         case 's':
           e.preventDefault();
-          handleSave("save");
+          handleSave();
           break;
         case 'w':
           e.preventDefault();
