@@ -107,10 +107,11 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
 
   // Bill metadata
   const [billNumber, setBillNumber] = useState("");
-  const [billDate] = useState(() => {
-    const now = new Date();
-    return now.toISOString().split("T")[0];
-  });
+  const [billDate] = useState(() => new Date().toISOString().split("T")[0]);
+
+  // WhatsApp template (editable per-bill)
+  const [waTemplate, setWaTemplate] = useState("");
+  const [showWaTemplate, setShowWaTemplate] = useState(false);
 
   // Customer
   const [customerName, setCustomerName] = useState("");
@@ -161,6 +162,8 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
           ...item,
           gst_percent: item.gst_percent === 0 ? (shopData.default_gst || 0) : item.gst_percent
         })));
+        // Seed WhatsApp template from shop settings
+        setWaTemplate(shopData.whatsapp_message_template || 'Dear {customer_name}, thank you for your purchase at {shop_name}!');
         
         const supabase = createClient();
         const { data: pData } = await supabase.from('products').select('id, name, price, gst_percent').eq('client_id', shopData.id);
@@ -374,47 +377,20 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
     };
   }, [items, discountType, discountValue, extraCharges]);
 
-  // ── Save bill (via server API to bypass RLS) ──────────────────
-  async function handleSave(action: "send" | "print" | "save") {
-    if (isSaving) return;
-    if (savedBillId) {
-      if (action === "print") {
-        window.open(`/bill-preview/${savedBillId}`, "_blank");
-      } else if (action === "send") {
-        openWhatsapp();
-      } else {
-        toast.info('Bill already saved. Click "+ New Bill" to create a new one.');
-      }
-      return;
-    }
-    setIsSaving(true);
-    if (!shop) {
-      toast.error("Business settings not loaded. Configure your business in Settings first.");
-      return;
-    }
-
-    if (action === "send" && customerPhone.length !== 10) {
-      toast.error("Please enter a valid 10-digit phone number to send WhatsApp.");
-      return;
-    }
-
-    const validItems = items.filter((i) => i.name.trim() && i.qty > 0 && i.price > 0);
-
-    setSaving(action);
-
+  // ── Unified save — prevents duplicate DB inserts across all actions ──
+  async function ensureSaved(): Promise<string | null> {
+    if (savedBillId) return savedBillId;
+    if (!shop) { toast.error('Business settings not loaded.'); return null; }
     try {
+      setIsSaving(true);
+      const validItems = items.filter(i => i.name.trim() && i.qty > 0 && i.price > 0);
       const billPayload = {
         client_id: shop.id,
         customer_name: customerName.trim(),
         customer_phone: customerPhone,
         bill_number: billNumber,
         bill_date: billDate,
-        items: validItems.map((i) => ({
-          name: i.name.trim(),
-          qty: i.qty,
-          price: i.price,
-          gst_percent: i.gst_percent,
-        })),
+        items: validItems.map(i => ({ name: i.name.trim(), qty: i.qty, price: i.price, gst_percent: i.gst_percent })),
         subtotal: calculations.subtotal,
         gst_amount: calculations.totalGST,
         total: calculations.grandTotal,
@@ -422,223 +398,59 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
         discount_value: discountValue,
         discount_amount: calculations.discountAmount,
         extra_charges: extraCharges.filter(ec => ec.label.trim() && ec.amount > 0),
-        whatsapp_sent: action === "send",
-        whatsapp_sent_at: (action === "send") && shop.whatsapp_enabled ? new Date().toISOString() : null,
+        whatsapp_sent: false,
       };
-
-      // To bypass browser popup blockers, we must open the new tab synchronously before the async fetch
-      let newWindow: Window | null = null;
-      if (action === "print" || action === "send") {
-        newWindow = window.open("", "_blank");
-      }
-
-      // Use server API route (bypasses RLS with admin key)
-      const saveRes = await fetch("/api/bills", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ billPayload, editBillId: savedBillId || editBillId }),
+      const res = await fetch('/api/bills', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ billPayload, editBillId }),
       });
-
-      const saveJson = await saveRes.json();
-
-      if (!saveRes.ok) {
-        if (newWindow) newWindow.close();
-        throw new Error(saveJson.error || "Failed to save bill");
-      }
-
-      const billId = saveJson.data?.[0]?.id || billPayload.bill_number;
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Save failed');
+      const billId = json.data?.[0]?.id || billPayload.bill_number;
       setSavedBillId(billId);
-
-      if (action === "print") {
-        let opened = false;
-        if (newWindow) {
-          try {
-            newWindow.location.href = `/bill-preview/${billId}`;
-            opened = true;
-          } catch (e) {
-            console.error("Popup blocked", e);
-          }
-        }
-        
-        if (!opened) {
-          const fallback = window.open(`/bill-preview/${billId}`, "_blank");
-          if (fallback) opened = true;
-        }
-
-        if (opened) {
-          toast.success("Bill saved! Opening print preview...");
-        } else {
-          toast.success("Bill saved! (Popup blocked)", {
-            action: {
-              label: "Open Print",
-              onClick: () => window.open(`/bill-preview/${billId}`, "_blank")
-            }
-          });
-        }
-      }
-
-      if (action === "send") {
-        const message = shop.whatsapp_message_template
-          ? shop.whatsapp_message_template.replace(/\{customer_name\}/g, customerName.trim())
-          : `Dear ${customerName.trim()}, thank you for your purchase!`;
-
-        if (shop.whatsapp_enabled) {
-          toast("Sending WhatsApp message...");
-          try {
-            const waRes = await fetch("/api/send-whatsapp", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                phone: customerPhone,
-                message,
-                billId,
-                clientId: shop.id
-              }),
-            });
-            if (!waRes.ok) throw new Error("API failed");
-            if (newWindow) newWindow.close();
-            toast.success("WhatsApp sent automatically!");
-          } catch {
-            // Automation failed, fall back to manual
-            const waUrl = `https://wa.me/91${customerPhone}?text=${encodeURIComponent(message)}`;
-            let opened = false;
-            if (newWindow) {
-              try {
-                newWindow.location.href = waUrl;
-                opened = true;
-              } catch {
-                // Ignore cross-origin or popup errors
-              }
-            }
-            if (!opened) {
-              const fallback = window.open(waUrl, "_blank");
-              if (fallback) opened = true;
-            }
-            if (opened) {
-              toast.success("Bill saved! WhatsApp opened in new tab.");
-            } else {
-              toast.success("Bill saved! (Popup blocked)", {
-                action: {
-                  label: "Open WhatsApp",
-                  onClick: () => window.open(waUrl, "_blank")
-                }
-              });
-            }
-          }
-        } else {
-          // Manual mode: open wa.me
-          const waUrl = `https://wa.me/91${customerPhone}?text=${encodeURIComponent(message)}`;
-          let opened = false;
-          if (newWindow) {
-            try {
-              newWindow.location.href = waUrl;
-              opened = true;
-            } catch {
-              // Ignore cross-origin or popup errors
-            }
-          }
-          if (!opened) {
-            const fallback = window.open(waUrl, "_blank");
-            if (fallback) opened = true;
-          }
-          if (opened) {
-            toast.success("Bill saved! WhatsApp opened in new tab.");
-          } else {
-            toast.success("Bill saved! (Popup blocked)", {
-              action: {
-                label: "Open WhatsApp",
-                onClick: () => window.open(waUrl, "_blank")
-              }
-            });
-          }
-        }
-      }
-      
-      if (action === "save") {
-        toast.success("Bill saved successfully!");
-      }
-    } catch (err: unknown) {
-      console.error("Save failed:", err);
-      const errorMessage = err instanceof Error ? err.message : "Please try again.";
-      toast.error(`Failed to save bill: ${errorMessage}`);
+      return billId;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Save failed');
+      return null;
     } finally {
       setIsSaving(false);
-      setSaving(null);
     }
   }
 
-  // ── Print specific flow ──────────────────────────────────────
+  // ── Save only button handler ──────────────────────────────────
+  async function handleSave() {
+    if (isSaving) return;
+    if (savedBillId) { toast.info('Bill already saved. Click "+ New Bill" to start a new one.'); return; }
+    setSaving('save');
+    const billId = await ensureSaved();
+    setSaving(null);
+    if (billId) toast.success('Bill saved successfully!');
+  }
+
   // ── Print specific flow ──────────────────────────────────────
   async function saveAndPrint() {
     if (isSaving) return;
-    setIsSaving(true);
-    if (!customerName.trim()) {
-      alert('Enter customer name')
-      setIsSaving(false);
-      return
-    }
-
+    if (!customerName.trim()) { alert('Enter customer name'); return; }
     setSaving("print");
-
     try {
-      const validItems = items.filter(i => i.name && i.qty && i.price)
+      const billId = await ensureSaved();
+      if (!billId) { setSaving(null); return; }
+      const validItems = items.filter(i => i.name && i.qty && i.price);
 
-      if (!savedBillId) {
-        const printPayload = {
-          client_id: shop?.id,
-          customer_name: customerName.trim(),
-          customer_phone: customerPhone.replace(/\D/g, '').slice(-10),
-          bill_number: billNumber,
-          bill_date: billDate,
-          items: validItems.map(i => ({ name: i.name.trim(), qty: i.qty, price: i.price, gst_percent: i.gst_percent })),
-          subtotal: calculations.subtotal || 0,
-          gst_amount: calculations.totalGST || 0,
-          total: calculations.grandTotal || 0,
-          discount_type: discountType,
-          discount_value: discountValue,
-          discount_amount: calculations.discountAmount,
-          extra_charges: extraCharges.filter(ec => ec.label.trim() && ec.amount > 0),
-          whatsapp_sent: false,
-        };
-
-        const saveRes = await fetch("/api/bills", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ billPayload: printPayload }),
-        });
-        const saveJson = await saveRes.json();
-
-        if (!saveRes.ok) {
-          alert('Save failed: ' + (saveJson.error || 'Unknown error'))
-          setSaving(null)
-          setIsSaving(false)
-          return
-        }
-
-        const billId = saveJson.data?.[0]?.id || printPayload.bill_number;
-        setSavedBillId(billId);
-      }
-
-      // Build bill HTML as a string — inject into print-area div
+      // Build print HTML
       const itemRows = validItems.map((item, i) => {
-        const amt = Number(item.qty) * Number(item.price) *
-          (1 + Number(item.gst_percent || 0) / 100)
+        const amt = Number(item.qty) * Number(item.price);
         return `
           <tr style="background:${i % 2 === 0 ? '#fff' : '#fafafa'}">
             <td style="padding:5px 8px">${i + 1}</td>
             <td style="padding:5px 8px">${item.name}</td>
             <td style="padding:5px 8px;text-align:right">${item.qty}</td>
-            <td style="padding:5px 8px;text-align:right">
-              ₹${Number(item.price).toFixed(2)}
-            </td>
-            <td style="padding:5px 8px;text-align:right">
-              ${item.gst_percent || 0}%
-            </td>
-            <td style="padding:5px 8px;text-align:right">
-              ₹${amt.toFixed(2)}
-            </td>
-          </tr>`
-      }).join('')
+            <td style="padding:5px 8px;text-align:right">&#8377;${Number(item.price).toFixed(2)}</td>
+            <td style="padding:5px 8px;text-align:right">${item.gst_percent || 0}%</td>
+            <td style="padding:5px 8px;text-align:right">&#8377;${amt.toFixed(2)}</td>
+          </tr>`;
+      }).join('');
 
       const itemsSection = validItems.length > 0 ? `
         <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:12px">
@@ -657,152 +469,125 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
         <div style="display:flex;justify-content:flex-end">
           <div style="width:220px;font-size:13px">
             <div style="display:flex;justify-content:space-between;padding:3px 0;border-top:1px solid #ddd">
-              <span>Subtotal</span>
-              <span>₹${Number(calculations.subtotal || 0).toFixed(2)}</span>
+              <span>Subtotal</span><span>&#8377;${Number(calculations.subtotal || 0).toFixed(2)}</span>
             </div>
-            ${calculations.discountAmount > 0 ? '<div style="display:flex;justify-content:space-between;padding:3px 0;color:#16a34a"><span>Discount' + (discountType === 'percent' ? ' (' + discountValue + '%)' : '') + '</span><span>-₹' + Number(calculations.discountAmount).toFixed(2) + '</span></div>' : ''}
+            ${calculations.discountAmount > 0 ? '<div style="display:flex;justify-content:space-between;padding:3px 0;color:#16a34a"><span>Discount' + (discountType === 'percent' ? ' (' + discountValue + '%)' : '') + '</span><span>-&#8377;' + Number(calculations.discountAmount).toFixed(2) + '</span></div>' : ''}
             <div style="display:flex;justify-content:space-between;padding:3px 0">
-              <span>GST</span>
-              <span>₹${Number(calculations.totalGST || 0).toFixed(2)}</span>
+              <span>GST</span><span>&#8377;${Number(calculations.totalGST || 0).toFixed(2)}</span>
             </div>
-            ${extraCharges.filter(ec => ec.label && ec.amount > 0).map(ec => '<div style="display:flex;justify-content:space-between;padding:3px 0"><span>' + ec.label + '</span><span>₹' + Number(ec.amount).toFixed(2) + '</span></div>').join('')}
+            ${extraCharges.filter(ec => ec.label && ec.amount > 0).map(ec => '<div style="display:flex;justify-content:space-between;padding:3px 0"><span>' + ec.label + '</span><span>&#8377;' + Number(ec.amount).toFixed(2) + '</span></div>').join('')}
             <div style="display:flex;justify-content:space-between;padding:6px 0;border-top:2px solid #333;font-weight:bold;font-size:15px">
-              <span>Total</span>
-              <span>₹${Number(calculations.grandTotal || 0).toFixed(2)}</span>
+              <span>Total</span><span>&#8377;${Number(calculations.grandTotal || 0).toFixed(2)}</span>
             </div>
           </div>
-        </div>` : ''
+        </div>` : '';
 
       const billHtml = `
         <div style="font-family:Arial,sans-serif;font-size:13px;color:#000;padding:16mm;max-width:740px;margin:0 auto">
-          
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
             <div>
-              ${shop?.logo_url
-                ? `<img src="${shop.logo_url}" style="max-height:60px;margin-bottom:8px;display:block;filter:grayscale(100%)" />`
-                : ''}
-              <div style="font-size:18px;font-weight:bold">
-                ${shop?.shop_name || ''}
-              </div>
-              <div style="color:#555;font-size:12px">
-                ${shop?.shop_address || ''}
-              </div>
-              ${shop?.gst_number
-                ? `<div style="color:#555;font-size:12px">
-                    GSTIN: ${shop.gst_number}
-                   </div>`
-                : ''}
+              ${shop?.logo_url ? `<img src="${shop.logo_url}" style="max-height:60px;margin-bottom:8px;display:block;filter:grayscale(100%)" />` : ''}
+              <div style="font-size:18px;font-weight:bold">${shop?.shop_name || ''}</div>
+              <div style="color:#555;font-size:12px">${shop?.shop_address || ''}</div>
+              ${shop?.gst_number ? `<div style="color:#555;font-size:12px">GSTIN: ${shop.gst_number}</div>` : ''}
             </div>
             <div style="text-align:right">
               <div style="font-weight:bold;font-size:15px">${billNumber}</div>
-              <div style="color:#555;font-size:12px">
-                ${new Date(billDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-              </div>
+              <div style="color:#555;font-size:12px">${new Date(billDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
             </div>
           </div>
-
           <hr style="border:none;border-top:1.5px solid #ddd;margin:10px 0" />
-
           <div style="margin-bottom:16px">
             <div style="font-weight:600;margin-bottom:2px">Bill To:</div>
             <div>${customerName.trim()}</div>
-            <div style="color:#555;font-size:12px">
-              ${customerPhone.replace(/\D/g, '').slice(-10)}
-            </div>
+            <div style="color:#555;font-size:12px">${customerPhone.replace(/\D/g, '').slice(-10)}</div>
           </div>
-
           ${itemsSection}
+          <div style="text-align:center;color:#999;font-size:11px;margin-top:24px;padding-top:10px;border-top:1px solid #eee">Thank you for your business!</div>
+        </div>`;
 
-          <div style="text-align:center;color:#999;font-size:11px;margin-top:24px;padding-top:10px;border-top:1px solid #eee">
-            Thank you for your business!
-          </div>
-        </div>
-      `
+      const existing = document.getElementById('bill-print-root');
+      if (existing) existing.remove();
+      const container = document.createElement('div');
+      container.id = 'bill-print-root';
+      container.innerHTML = billHtml;
+      document.body.appendChild(container);
 
-      // Remove any previous print container if exists
-      const existing = document.getElementById('bill-print-root')
-      if (existing) existing.remove()
-
-      // Create container appended directly to body
-      // This sits OUTSIDE Next.js root div
-      const container = document.createElement('div')
-      container.id = 'bill-print-root'
-      container.innerHTML = billHtml
-      document.body.appendChild(container)
-
-      // Add a style tag that hides everything except our container
-      const styleTag = document.createElement('style')
-      styleTag.id = 'bill-print-style'
+      const styleTag = document.createElement('style');
+      styleTag.id = 'bill-print-style';
       styleTag.innerHTML = `
         @media print {
-          html, body { background: white !important; color: black !important; }
-          body > *:not(#bill-print-root) {
-            display: none !important;
-            visibility: hidden !important;
-          }
-          #bill-print-root {
-            display: block !important;
-            visibility: visible !important;
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100% !important;
-            background: white !important;
-            z-index: 999999 !important;
-          }
+          html, body { background: white !important; color: black !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          body > *:not(#bill-print-root) { display: none !important; visibility: hidden !important; }
+          #bill-print-root { display: block !important; visibility: visible !important; position: fixed !important; top: 0 !important; left: 0 !important; width: 100% !important; background: white !important; z-index: 999999 !important; }
           @page { margin: 0; size: A4 portrait; }
         }
-      `
-      document.head.appendChild(styleTag)
+      `;
+      document.head.appendChild(styleTag);
 
-      // Small delay to let DOM update before print dialog
+      toast.success('Bill saved! Opening print...');
       setTimeout(() => {
-        window.print()
-
-        // Cleanup after print dialog closes
+        window.print();
         window.onafterprint = () => {
-          const c = document.getElementById('bill-print-root')
-          const s = document.getElementById('bill-print-style')
-          if (c) c.remove()
-          if (s) s.remove()
-          window.onafterprint = null
-        }
-      }, 100)
+          const c = document.getElementById('bill-print-root');
+          const s = document.getElementById('bill-print-style');
+          if (c) c.remove();
+          if (s) s.remove();
+          window.onafterprint = null;
+        };
+      }, 150);
     } catch (err) {
       console.error(err);
-      toast.error("Failed to save and print.");
+      toast.error('Failed to print.');
     } finally {
       setIsSaving(false);
       setSaving(null);
     }
   }
 
-  // ── Standalone WhatsApp Flow ──────────────────────────────────
-  function openWhatsapp() {
-    const raw = customerPhone.replace(/\D/g, '')
-    const ten = raw.slice(-10)
 
-    if (ten.length !== 10) {
-      alert('Phone number must be 10 digits. Got: ' + ten)
-      return
+
+
+  async function openWhatsapp() {
+    const raw = customerPhone.replace(/\D/g, '');
+    const ten = raw.slice(-10);
+    if (ten.length !== 10) { alert('Phone number must be 10 digits.'); return; }
+
+    setSaving('send');
+    try {
+      const billId = await ensureSaved();
+
+      const resolvedTemplate = (waTemplate || shop?.whatsapp_message_template || 'Dear {customer_name}, thank you for visiting {shop_name}!')
+        .replace(/\{customer_name\}/gi, customerName.trim() || 'Customer')
+        .replace(/\{shop_name\}/gi, shop?.shop_name || '');
+
+      if (shop?.whatsapp_enabled && billId) {
+        toast('Sending WhatsApp...');
+        try {
+          const waRes = await fetch('/api/send-whatsapp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: ten, message: resolvedTemplate, billId, clientId: shop.id }),
+          });
+          const waJson = await waRes.json();
+          if (!waRes.ok || waJson.error) throw new Error(waJson.error || 'API failed');
+          toast.success('WhatsApp sent automatically!');
+          return;
+        } catch {
+          toast.error('Auto-send failed, opening WhatsApp manually...');
+        }
+      }
+
+      // Manual fallback / manual mode
+      const waUrl = 'https://wa.me/91' + ten + '?text=' + encodeURIComponent(resolvedTemplate);
+      const a = document.createElement('a');
+      a.href = waUrl; a.target = '_blank'; a.rel = 'noopener noreferrer';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      if (billId) toast.success('Bill saved! WhatsApp opened.');
+      else toast.info('WhatsApp opened (bill not saved yet).');
+    } finally {
+      setSaving(null);
     }
-
-    const template = shop?.whatsapp_message_template ||
-      'Dear {customer_name}, thank you for visiting!'
-
-    const msg = template
-      .replace(/\{customer_name\}/gi, customerName.trim() || 'Customer')
-      .replace(/\{shop_name\}/gi, shop?.shop_name || '')
-
-    const waUrl = 'https://wa.me/91' + ten + '?text=' + encodeURIComponent(msg)
-
-    const a = document.createElement('a')
-    a.href = waUrl
-    a.target = '_blank'
-    a.rel = 'noopener noreferrer'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
   }
 
   // ── Keyboard Shortcuts ────────────────────────────────────────
@@ -927,6 +712,8 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
     setSavedBillId(null);
     setIsSaving(false);
     setSaving(null);
+    setWaTemplate(shop?.whatsapp_message_template || 'Dear {customer_name}, thank you for your purchase at {shop_name}!');
+    setShowWaTemplate(false);
     generateBillNumber();
   }
 
@@ -1509,23 +1296,62 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
           </div>
         </CardContent>
       </Card>
-      {/* Action Buttons */}
-      <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-end gap-3 pb-6">
-            <Button type="button" variant="outline" onClick={handleClearBill} title="Clear Bill (Alt + C)">
-              Clear Bill
+      {/* WhatsApp Template Editor (collapsible) */}
+      <Card>
+        <CardHeader className="py-3 px-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-sm">📱 WhatsApp Message Template</CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Use <code className="bg-muted px-1 rounded text-xs">{'{customer_name}'}</code> and <code className="bg-muted px-1 rounded text-xs">{'{shop_name}'}</code> as variables
+              </p>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setShowWaTemplate(v => !v)} className="text-xs">
+              {showWaTemplate ? 'Hide' : 'Edit Template'}
             </Button>
+          </div>
+        </CardHeader>
+        {showWaTemplate && (
+          <CardContent className="pt-0">
+            <textarea
+              value={waTemplate}
+              onChange={e => setWaTemplate(e.target.value)}
+              rows={4}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+              placeholder="Dear {customer_name}, thank you for shopping at {shop_name}!"
+            />
+            <div className="mt-2 p-3 rounded-md bg-muted/60 text-sm">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Preview: </span>
+              <span className="text-sm">
+                {waTemplate
+                  .replace(/\{customer_name\}/gi, customerName.trim() || 'Customer Name')
+                  .replace(/\{shop_name\}/gi, shop?.shop_name || 'Your Shop')}
+              </span>
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
+      {/* Action Buttons */}
+      <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-end gap-3 pb-6 billing-action-buttons">
+        <Button type="button" variant="outline" onClick={handleClearBill} title="Clear Bill (Alt + C)">
+          Clear Bill
+        </Button>
         <button
           type="button"
           onClick={openWhatsapp}
+          disabled={saving !== null}
           title="Send WhatsApp (Alt + W)"
           style={{
-            background: '#25d366', color: 'white',
+            background: saving === 'send' ? '#128c4a' : '#25d366', color: 'white',
             border: 'none', borderRadius: '8px',
             padding: '10px 20px', fontSize: '14px',
-            cursor: 'pointer', fontWeight: '500'
+            cursor: saving !== null ? 'not-allowed' : 'pointer',
+            fontWeight: '500',
+            opacity: saving !== null && saving !== 'send' ? 0.6 : 1,
           }}
         >
-          📱 Send WhatsApp
+          {saving === 'send' ? '⏳ Sending...' : '📱 Send WhatsApp'}
         </button>
 
         <Button
@@ -1543,7 +1369,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
         <Button
           type="button"
           variant="outline"
-          onClick={() => handleSave("save")}
+          onClick={() => handleSave()}
           disabled={saving !== null}
           size="lg"
           title="Save Only (Alt + S)"

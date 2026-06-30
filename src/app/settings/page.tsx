@@ -103,6 +103,13 @@ export default function SettingsPage() {
   }
   const [newProduct, setNewProduct] = useState(emptyProduct)
 
+  // ── Account Management state ──
+  const [newEmail, setNewEmail] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmNewPassword, setConfirmNewPassword] = useState('')
+  const [accountSaving, setAccountSaving] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+
   // ── Theme tokens ──
   const t = {
     light: {
@@ -1442,6 +1449,149 @@ export default function SettingsPage() {
           >
             {saving ? 'Saving...' : 'Save Settings'}
           </button>
+        </div>
+
+        {/* ── Account Management ── */}
+        <div style={card}>
+          <div style={sectionTitle}>Account Management</div>
+          <div style={sectionSub}>Change your login credentials or delete your account.</div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16 }}>
+            {/* Change Email */}
+            <div style={fieldWrap}>
+              <label style={labelStyle}>New Email / Username</label>
+              <input
+                style={{ ...inputStyle, background: c.inputBg }}
+                type="email"
+                placeholder="new@email.com"
+                value={newEmail}
+                onChange={e => setNewEmail(e.target.value)}
+              />
+            </div>
+
+            {/* Change Password */}
+            <div style={fieldWrap}>
+              <label style={labelStyle}>New Password</label>
+              <input
+                style={{ ...inputStyle, background: c.inputBg }}
+                type="password"
+                placeholder="Min 6 characters"
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+              />
+            </div>
+            <div style={fieldWrap}>
+              <label style={labelStyle}>Confirm New Password</label>
+              <input
+                style={{ ...inputStyle, background: c.inputBg }}
+                type="password"
+                placeholder="Repeat password"
+                value={confirmNewPassword}
+                onChange={e => setConfirmNewPassword(e.target.value)}
+              />
+            </div>
+
+            <button
+              type="button"
+              disabled={accountSaving || (!newEmail && !newPassword)}
+              onClick={async () => {
+                if (newPassword && newPassword !== confirmNewPassword) {
+                  alert('Passwords do not match'); return;
+                }
+                if (newPassword && newPassword.length < 6) {
+                  alert('Password must be at least 6 characters'); return;
+                }
+                setAccountSaving(true);
+                try {
+                  const body: { email?: string; password?: string } = {};
+                  if (newEmail.trim()) body.email = newEmail.trim();
+                  if (newPassword.trim()) body.password = newPassword.trim();
+                  const res = await fetch('/api/auth/update-account', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                  });
+                  const json = await res.json();
+                  if (!res.ok) throw new Error(json.error || 'Update failed');
+                  alert('Account updated successfully! Please log in again with your new credentials.');
+                  setNewEmail(''); setNewPassword(''); setConfirmNewPassword('');
+                } catch (err) {
+                  alert('Error: ' + (err instanceof Error ? err.message : 'Unknown error'));
+                } finally {
+                  setAccountSaving(false);
+                }
+              }}
+              style={{
+                background: accountSaving ? '#93c5fd' : '#2563eb',
+                color: 'white', border: 'none', borderRadius: 8,
+                padding: '10px 20px', fontSize: 13, fontWeight: 600,
+                cursor: accountSaving ? 'not-allowed' : 'pointer',
+                opacity: (!newEmail && !newPassword) ? 0.5 : 1,
+              }}
+            >
+              {accountSaving ? '⏳ Updating...' : '✅ Update Account'}
+            </button>
+
+            {/* Delete Account */}
+            <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid ' + c.border }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: '#dc2626', marginBottom: 6 }}>Danger Zone</div>
+              <div style={{ fontSize: 12, color: c.textSub, marginBottom: 12 }}>
+                Deleting your account is permanent. All your bills, products, and settings will be removed.
+              </div>
+              {!deleteConfirm ? (
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirm(true)}
+                  style={{
+                    background: 'transparent', color: '#dc2626',
+                    border: '1px solid #fca5a5', borderRadius: 8,
+                    padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  🗑️ Delete My Account
+                </button>
+              ) : (
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 13, color: '#dc2626', fontWeight: 600 }}>Are you sure? This cannot be undone.</span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setAccountSaving(true);
+                      try {
+                        const res = await fetch('/api/auth/delete-account', { method: 'DELETE' });
+                        const json = await res.json();
+                        if (!res.ok) throw new Error(json.error || 'Delete failed');
+                        alert('Account deleted. Redirecting to login...');
+                        window.location.href = '/login';
+                      } catch (err) {
+                        alert('Error: ' + (err instanceof Error ? err.message : 'Unknown error'));
+                        setAccountSaving(false);
+                        setDeleteConfirm(false);
+                      }
+                    }}
+                    style={{
+                      background: '#dc2626', color: 'white',
+                      border: 'none', borderRadius: 8,
+                      padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    }}
+                  >
+                    Yes, Delete
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteConfirm(false)}
+                    style={{
+                      background: 'transparent', border: '1px solid ' + c.border,
+                      borderRadius: 8, padding: '8px 14px', fontSize: 13, cursor: 'pointer',
+                      color: c.text,
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
       </div>

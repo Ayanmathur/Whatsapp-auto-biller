@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -133,15 +134,55 @@ export function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4 relative">
+    <div
+      className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
+      style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 40%, #0f4c75 80%, #1b6ca8 100%)' }}
+    >
+      {/* Floating receipt shapes in background */}
+      <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+        {[0,1,2,3,4,5].map(i => (
+          <div key={i} style={{
+            position: 'absolute',
+            width: i % 2 === 0 ? 110 : 75,
+            height: i % 2 === 0 ? 150 : 105,
+            background: 'rgba(255,255,255,0.035)',
+            borderRadius: 8,
+            border: '1px solid rgba(255,255,255,0.07)',
+            top: ['12%','58%','78%','22%','64%','38%'][i],
+            left: ['6%','78%','18%','68%','42%','88%'][i],
+            transform: `rotate(${[-15,12,-8,20,-5,18][i]}deg)`,
+          }}>
+            <div style={{ padding: '10px 8px' }}>
+              {[80,60,70,50].map((w,j) => (
+                <div key={j} style={{ height: 5, background: 'rgba(255,255,255,0.1)', borderRadius: 3, marginBottom: 7, width: w + '%' }} />
+              ))}
+            </div>
+          </div>
+        ))}
+        <div style={{ position:'absolute', fontSize:64, color:'rgba(255,255,255,0.04)', fontWeight:'bold', top:'28%', left:'32%' }}>₹</div>
+        <div style={{ position:'absolute', fontSize:40, color:'rgba(255,255,255,0.04)', fontWeight:'bold', top:'68%', left:'58%' }}>₹</div>
+      </div>
+
       {/* Hidden Admin Dot */}
-      <div 
-        className="fixed bottom-4 left-4 w-1.5 h-1.5 rounded-full bg-foreground opacity-20 cursor-default"
-        onClick={() => setView("admin")}
+      <div
+        className="fixed bottom-4 left-4 w-2 h-2 rounded-full bg-white opacity-10 cursor-default"
+        onClick={() => setView('admin')}
         title="Admin Access"
       />
 
-      <Card className="w-full max-w-[400px] shadow-lg">
+      {/* Glass card wrapper */}
+      <div style={{
+        width: '100%', maxWidth: 420, position: 'relative', zIndex: 10,
+        background: 'rgba(255,255,255,0.09)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        border: '1px solid rgba(255,255,255,0.16)',
+        borderRadius: 20,
+        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.1)',
+        overflow: 'hidden',
+      }}>
+        <div style={{ height: 4, background: 'linear-gradient(90deg,#3b82f6,#06b6d4,#10b981)' }} />
+        <div style={{ padding: '32px 32px 28px' }}>
         {view === "login" && (
           <>
             <CardHeader className="text-center pb-6">
@@ -324,7 +365,8 @@ export function LoginForm() {
             </CardContent>
           </>
         )}
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
