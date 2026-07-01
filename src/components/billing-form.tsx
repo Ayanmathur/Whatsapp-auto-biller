@@ -53,6 +53,9 @@ interface ShopInfo {
   whatsapp_automation_enabled?: boolean;
   whatsapp_api_token?: string;
   whatsapp_phone_number_id?: string;
+  default_discount_type?: DiscountType;
+  default_discount_value?: number;
+  saved_extra_charges?: ExtraCharge[];
 }
 
 interface LineItem {
@@ -143,6 +146,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
   const [discountType, setDiscountType] = useState<DiscountType>('none');
   const [discountValue, setDiscountValue] = useState(0);
   const [extraCharges, setExtraCharges] = useState<ExtraCharge[]>([]);
+  const [focusedExtraChargeIndex, setFocusedExtraChargeIndex] = useState<number | null>(null);
 
   // Saving
   const [saving, setSaving] = useState<string | null>(null);
@@ -169,6 +173,14 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
         })));
         // Seed WhatsApp template from shop settings
         setWaTemplate(shopData.whatsapp_message_template || 'Dear {customer_name}, thank you for your purchase at {shop_name}!');
+        
+        // Set default discount if editing is not taking over (we assume if it's a new bill)
+        if (!editBillId) {
+          if (shopData.default_discount_type && shopData.default_discount_type !== 'none') {
+            setDiscountType(shopData.default_discount_type);
+            setDiscountValue(shopData.default_discount_value || 0);
+          }
+        }
         
         const supabase = createClient();
         const { data: pData } = await supabase.from('products').select('id, name, price, gst_percent').eq('client_id', shopData.id);
@@ -295,6 +307,13 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
   function addItem() {
     setItems((prev) => [...prev, createEmptyItem()]);
   }
+
+  const handleItemKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addItem();
+    }
+  };
 
   function removeItem(itemId: string) {
     setItems((prev) => {
@@ -1059,6 +1078,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
                             onChange={(e) => handleItemNameChange(item.id, e.target.value)}
                             onFocus={() => setFocusedItemId(item.id)}
                             onBlur={() => setFocusedItemId(null)}
+                            onKeyDown={handleItemKeyDown}
                             className="h-9"
                           />
                           {focusedItemId === item.id && dbProducts.filter(p => p.name.toLowerCase().includes((item.name || "").toLowerCase())).length > 0 && (
@@ -1096,6 +1116,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
                               Math.max(0, parseInt(e.target.value) || 0)
                             )
                           }
+                          onKeyDown={handleItemKeyDown}
                           className="h-9 text-right"
                         />
                       </TableCell>
@@ -1113,6 +1134,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
                               Math.max(0, parseFloat(e.target.value) || 0)
                             )
                           }
+                          onKeyDown={handleItemKeyDown}
                           className="h-9 text-right font-mono"
                         />
                       </TableCell>
@@ -1203,6 +1225,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
                       onChange={(e) => handleItemNameChange(item.id, e.target.value)}
                       onFocus={() => setFocusedItemId(item.id)}
                       onBlur={() => setFocusedItemId(null)}
+                      onKeyDown={handleItemKeyDown}
                     />
                     {focusedItemId === item.id && dbProducts.filter(p => p.name.toLowerCase().includes((item.name || "").toLowerCase())).length > 0 && (
                       <div className="absolute z-10 w-full mt-1 bg-card border border-border rounded-md shadow-lg max-h-48 overflow-y-auto" style={{ top: '100%' }}>
@@ -1235,6 +1258,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
                         onChange={(e) =>
                           updateItem(item.id, "qty", Math.max(0, parseInt(e.target.value) || 0))
                         }
+                        onKeyDown={handleItemKeyDown}
                         className="text-center"
                       />
                     </div>
@@ -1248,6 +1272,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
                         onChange={(e) =>
                           updateItem(item.id, "price", Math.max(0, parseFloat(e.target.value) || 0))
                         }
+                        onKeyDown={handleItemKeyDown}
                         className="font-mono"
                       />
                     </div>
@@ -1384,13 +1409,39 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
                 </Button>
               </div>
               {extraCharges.map((ec, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <Input
-                    placeholder="e.g. Delivery, Packaging"
-                    value={ec.label}
-                    onChange={(e) => updateExtraCharge(idx, 'label', e.target.value)}
-                    className="h-8 text-sm flex-1"
-                  />
+                <div key={idx} className="flex items-center gap-2 relative">
+                  <div className="flex-1 relative">
+                    <Input
+                      placeholder="e.g. Delivery, Packaging"
+                      value={ec.label}
+                      onChange={(e) => updateExtraCharge(idx, 'label', e.target.value)}
+                      onFocus={() => setFocusedExtraChargeIndex(idx)}
+                      onBlur={() => setFocusedExtraChargeIndex(null)}
+                      onKeyDown={handleItemKeyDown}
+                      className="h-8 text-sm w-full"
+                    />
+                    {focusedExtraChargeIndex === idx && shop?.saved_extra_charges && shop.saved_extra_charges.filter(c => c.label.toLowerCase().includes((ec.label || "").toLowerCase())).length > 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-card border border-border rounded-md shadow-lg max-h-48 overflow-y-auto" style={{ top: '100%' }}>
+                        {shop.saved_extra_charges
+                          .filter(c => c.label.toLowerCase().includes((ec.label || "").toLowerCase()))
+                          .map((c, cIdx) => (
+                          <div
+                            key={cIdx}
+                            className="px-3 py-2 text-sm hover:bg-accent cursor-pointer border-b border-border last:border-0 flex justify-between items-center"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              updateExtraCharge(idx, 'label', c.label);
+                              updateExtraCharge(idx, 'amount', c.amount);
+                              setFocusedExtraChargeIndex(null);
+                            }}
+                          >
+                            <span>{c.label}</span>
+                            <span className="text-muted-foreground text-xs font-medium">₹{c.amount}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1">
                     <span className="text-xs text-muted-foreground">₹</span>
                     <Input
@@ -1400,6 +1451,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
                       placeholder="0"
                       value={ec.amount || ''}
                       onChange={(e) => updateExtraCharge(idx, 'amount', Math.max(0, parseFloat(e.target.value) || 0))}
+                      onKeyDown={handleItemKeyDown}
                       className="h-8 w-[90px] text-right font-mono"
                     />
                   </div>

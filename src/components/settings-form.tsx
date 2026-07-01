@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import type { BillSize, ProductEntry } from "@/types/database";
+import type { BillSize, ProductEntry, DiscountType, ExtraCharge } from "@/types/database";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -53,6 +53,9 @@ interface SettingsFormData {
   whatsapp_automation_enabled: boolean;
   whatsapp_api_token: string;
   whatsapp_phone_number_id: string;
+  default_discount_type: DiscountType;
+  default_discount_value: number;
+  saved_extra_charges: ExtraCharge[];
 }
 
 const INITIAL_FORM: SettingsFormData = {
@@ -77,6 +80,9 @@ const INITIAL_FORM: SettingsFormData = {
   whatsapp_automation_enabled: false,
   whatsapp_api_token: "",
   whatsapp_phone_number_id: "",
+  default_discount_type: "none",
+  default_discount_value: 0,
+  saved_extra_charges: [],
 };
 
 const BILL_SIZE_OPTIONS: { value: BillSize; label: string }[] = [
@@ -96,6 +102,25 @@ export function SettingsForm() {
   const [uploading, setUploading] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+
+  const [newExtraChargeLabel, setNewExtraChargeLabel] = useState("");
+  const [newExtraChargeAmount, setNewExtraChargeAmount] = useState("");
+
+  function handleAddExtraCharge() {
+    if (!newExtraChargeLabel.trim() || !newExtraChargeAmount) return;
+    updateField("saved_extra_charges", [
+      ...form.saved_extra_charges,
+      { label: newExtraChargeLabel.trim(), amount: Number(newExtraChargeAmount) }
+    ]);
+    setNewExtraChargeLabel("");
+    setNewExtraChargeAmount("");
+  }
+  
+  function handleRemoveExtraCharge(idx: number) {
+    const newCharges = [...form.saved_extra_charges];
+    newCharges.splice(idx, 1);
+    updateField("saved_extra_charges", newCharges);
+  }
 
   // ── Load existing settings ──────────────────────────────────────
   const loadSettings = useCallback(async () => {
@@ -137,6 +162,9 @@ export function SettingsForm() {
           whatsapp_automation_enabled: data.whatsapp_automation_enabled ?? false,
           whatsapp_api_token: data.whatsapp_api_token || "",
           whatsapp_phone_number_id: data.whatsapp_phone_number_id || "",
+          default_discount_type: data.default_discount_type || "none",
+          default_discount_value: data.default_discount_value || 0,
+          saved_extra_charges: data.saved_extra_charges || [],
         });
         if (data.logo_url) {
           setLogoPreview(data.logo_url);
@@ -275,6 +303,9 @@ export function SettingsForm() {
         whatsapp_automation_enabled: form.whatsapp_automation_enabled,
         whatsapp_api_token: form.whatsapp_api_token || null,
         whatsapp_phone_number_id: form.whatsapp_phone_number_id || null,
+        default_discount_type: form.default_discount_type,
+        default_discount_value: form.default_discount_value,
+        saved_extra_charges: form.saved_extra_charges,
       };
 
       if (form.id) {
@@ -434,6 +465,84 @@ export function SettingsForm() {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Default Discount */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="discountType">Default Discount Type</Label>
+              <Select
+                value={form.default_discount_type || "none"}
+                onValueChange={(v) => updateField("default_discount_type", v as DiscountType)}
+              >
+                <SelectTrigger id="discountType">
+                  <SelectValue placeholder="Discount Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="percent">Percentage (%)</SelectItem>
+                  <SelectItem value="fixed">Fixed Amount</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="discountValue">Default Discount Value</Label>
+              <Input
+                id="discountValue"
+                type="number"
+                min="0"
+                step="any"
+                disabled={form.default_discount_type === "none"}
+                value={form.default_discount_value || 0}
+                onChange={(e) => updateField("default_discount_value", parseFloat(e.target.value) || 0)}
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Saved Extra Charges */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Saved Extra Charges</CardTitle>
+          <CardDescription>
+            Pre-save common extra charges (e.g., Delivery, Packaging) to quickly add them to bills.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-3">
+            <Input 
+              placeholder="Charge Label (e.g., Delivery Fee)" 
+              value={newExtraChargeLabel}
+              onChange={(e) => setNewExtraChargeLabel(e.target.value)}
+              className="flex-1"
+            />
+            <Input 
+              placeholder="Amount" 
+              type="number"
+              value={newExtraChargeAmount}
+              onChange={(e) => setNewExtraChargeAmount(e.target.value)}
+              className="w-32"
+            />
+            <Button type="button" onClick={handleAddExtraCharge} variant="secondary">
+              Add
+            </Button>
+          </div>
+          
+          {form.saved_extra_charges.length > 0 && (
+            <div className="border rounded-md divide-y mt-4">
+              {form.saved_extra_charges.map((charge, idx) => (
+                <div key={idx} className="flex justify-between items-center p-3 text-sm">
+                  <span>{charge.label}</span>
+                  <div className="flex items-center gap-4">
+                    <span className="font-medium text-muted-foreground">₹{charge.amount}</span>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveExtraCharge(idx)} className="h-8 text-destructive">
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -59,6 +59,9 @@ export interface Database {
           whatsapp_automation_enabled: boolean | null
           whatsapp_api_token: string | null
           whatsapp_phone_number_id: string | null
+          default_discount_type: DiscountType | null
+          default_discount_value: number | null
+          saved_extra_charges: ExtraCharge[] | null
         }
         Insert: {
           id?: string
@@ -85,6 +88,9 @@ export interface Database {
           whatsapp_automation_enabled?: boolean | null
           whatsapp_api_token?: string | null
           whatsapp_phone_number_id?: string | null
+          default_discount_type?: DiscountType | null
+          default_discount_value?: number | null
+          saved_extra_charges?: ExtraCharge[] | null
         }
         Update: {
           id?: string
@@ -109,8 +115,10 @@ export interface Database {
           next_billing_date?: string
           created_at?: string
           whatsapp_automation_enabled?: boolean | null
-          whatsapp_api_token?: string | null
           whatsapp_phone_number_id?: string | null
+          default_discount_type?: DiscountType | null
+          default_discount_value?: number | null
+          saved_extra_charges?: ExtraCharge[] | null
         }
       }
       bills: {
