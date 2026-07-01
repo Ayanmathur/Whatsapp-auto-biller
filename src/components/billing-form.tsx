@@ -756,6 +756,53 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       {/* Shop Header */}
       <Card>
         <CardHeader>
+          {/* Compact Scanner Toolbar */}
+          <div className="flex items-center gap-2 mb-3">
+            <button
+              type="button"
+              onClick={() => setHardwareScannerEnabled(prev => !prev)}
+              title={hardwareScannerEnabled ? 'Scanner ON — click to disable' : 'Scanner OFF — click to enable'}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                hardwareScannerEnabled
+                  ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 border border-green-300 dark:border-green-700'
+                  : 'bg-muted text-muted-foreground border border-border'
+              }`}
+            >
+              {hardwareScannerEnabled ? '🟢' : '⚫'} 📡
+              {lastScanFeedback && (
+                <span className={lastScanFeedback.type === 'success' ? 'text-green-600' : 'text-red-500'}>
+                  {lastScanFeedback.message}
+                </span>
+              )}
+            </button>
+            {!phoneScannerSession ? (
+              <button
+                type="button"
+                onClick={() => { startPhoneSession(); setShowPhoneQR(true); }}
+                title="Link phone as barcode scanner"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700 transition-colors hover:bg-blue-100"
+              >
+                📱 Link Phone
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowPhoneQR(true)}
+                title={phoneConnected ? 'Phone connected — tap to show QR' : 'Waiting for phone...'}
+                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                  phoneConnected
+                    ? 'bg-green-100 text-green-800 border border-green-300 dark:bg-green-900/40 dark:text-green-300 dark:border-green-700'
+                    : 'bg-yellow-50 text-yellow-800 border border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-700'
+                }`}
+              >
+                📱 {phoneConnected ? 'Connected' : 'Waiting...'}
+              </button>
+            )}
+            {phoneScannerSession && (
+              <button type="button" onClick={() => { stopPhoneSession(); setShowPhoneQR(false); }}
+                className="text-xs text-red-500 hover:text-red-700">✕</button>
+            )}
+          </div>
           <div className="flex items-center justify-end">
             <Button onClick={handleNewBill} variant="default" title="New Bill (Alt + N)">
               + New Bill
@@ -802,69 +849,6 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
         </CardContent>
       </Card>
 
-      {/* Hardware Scanner Status Bar */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '10px 14px',
-        background: hardwareScannerEnabled ? '#f0fdf4' : '#f9fafb',
-        border: '1px solid ' + (hardwareScannerEnabled ? '#86efac' : '#e5e7eb'),
-        borderRadius: 10, marginBottom: 10,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 18 }}>{hardwareScannerEnabled ? '🟢' : '⚫'}</span>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: hardwareScannerEnabled ? '#166534' : '#6b7280' }}>
-              {hardwareScannerEnabled ? '📡 Hardware Scanner Active — scan any product now' : 'Hardware Scanner Disabled'}
-            </div>
-            {lastScanFeedback && (
-              <div style={{ fontSize: 12, marginTop: 2, color: lastScanFeedback.type === 'success' ? '#16a34a' : '#dc2626' }}>
-                {lastScanFeedback.message}
-              </div>
-            )}
-          </div>
-        </div>
-        <div
-          onClick={() => setHardwareScannerEnabled(prev => !prev)}
-          title={hardwareScannerEnabled ? 'Disable hardware scanner' : 'Enable hardware scanner'}
-          style={{
-            width: 40, height: 22, borderRadius: 11,
-            background: hardwareScannerEnabled ? '#22c55e' : '#d1d5db',
-            position: 'relative', cursor: 'pointer', flexShrink: 0,
-          }}
-        >
-          <div style={{
-            position: 'absolute', top: 2,
-            left: hardwareScannerEnabled ? 20 : 2,
-            width: 18, height: 18, borderRadius: '50%', background: 'white',
-            transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-          }} />
-        </div>
-      </div>
-
-      {/* Phone Scanner Link Button */}
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        {!phoneScannerSession ? (
-          <button
-            type="button"
-            onClick={() => { startPhoneSession(); setShowPhoneQR(true); }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors"
-            style={{ background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}
-          >
-            📱 Link Phone as Scanner
-          </button>
-        ) : (
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold"
-              style={{ background: phoneConnected ? '#f0fdf4' : '#fef9c3', color: phoneConnected ? '#166534' : '#854d0e', border: '1px solid ' + (phoneConnected ? '#86efac' : '#fde047') }}>
-              {phoneConnected ? '📱 Phone Connected' : '📱 Waiting for phone...'}
-            </span>
-            <button type="button" onClick={() => setShowPhoneQR(true)}
-              className="text-xs text-blue-600 underline">Show QR</button>
-            <button type="button" onClick={() => { stopPhoneSession(); setShowPhoneQR(false); }}
-              className="text-xs text-red-600 underline">Disconnect</button>
-          </div>
-        )}
-      </div>
 
       {/* Phone Scanner QR Modal */}
       {showPhoneQR && phoneScannerSession && (
@@ -1407,41 +1391,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
           </div>
         </CardContent>
       </Card>
-      {/* WhatsApp Template Editor (collapsible) */}
-      <Card>
-        <CardHeader className="py-3 px-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-sm">📱 WhatsApp Message Template</CardTitle>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Use <code className="bg-muted px-1 rounded text-xs">{'{customer_name}'}</code> and <code className="bg-muted px-1 rounded text-xs">{'{shop_name}'}</code> as variables
-              </p>
-            </div>
-            <Button variant="ghost" size="sm" onClick={() => setShowWaTemplate(v => !v)} className="text-xs">
-              {showWaTemplate ? 'Hide' : 'Edit Template'}
-            </Button>
-          </div>
-        </CardHeader>
-        {showWaTemplate && (
-          <CardContent className="pt-0">
-            <textarea
-              value={waTemplate}
-              onChange={e => setWaTemplate(e.target.value)}
-              rows={4}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="Dear {customer_name}, thank you for shopping at {shop_name}!"
-            />
-            <div className="mt-2 p-3 rounded-md bg-muted/60 text-sm">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Preview: </span>
-              <span className="text-sm">
-                {waTemplate
-                  .replace(/\{customer_name\}/gi, customerName.trim() || 'Customer Name')
-                  .replace(/\{shop_name\}/gi, shop?.shop_name || 'Your Shop')}
-              </span>
-            </div>
-          </CardContent>
-        )}
-      </Card>
+
 
       {/* Action Buttons */}
       <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-end gap-3 pb-6 billing-action-buttons">
