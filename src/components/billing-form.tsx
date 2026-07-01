@@ -112,7 +112,6 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
 
   // WhatsApp template (editable per-bill)
   const [waTemplate, setWaTemplate] = useState("");
-  const [showWaTemplate, setShowWaTemplate] = useState(false);
 
   // Customer
   const [customerName, setCustomerName] = useState("");
@@ -733,7 +732,6 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
     setIsSaving(false);
     setSaving(null);
     setWaTemplate(shop?.whatsapp_message_template || 'Dear {customer_name}, thank you for your purchase at {shop_name}!');
-    setShowWaTemplate(false);
     generateBillNumber();
   }
 
