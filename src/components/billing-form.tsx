@@ -661,12 +661,15 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
     const supabase = createClient();
 
     // Look up product in Supabase
-    const { data: product, error } = await supabase
+    const { data: products, error } = await supabase
       .from('products')
       .select('*')
       .eq('barcode_value', barcodeValue)
-      .eq('client_id', shop.id)
-      .single();
+      .or(`client_id.eq.${shop.id},client_id.is.null`)
+      .order('client_id', { ascending: false })
+      .limit(1);
+
+    const product = products?.[0];
 
     if (error || !product) {
       const msg = `❌ Unknown barcode: ${barcodeValue}`;
