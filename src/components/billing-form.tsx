@@ -488,27 +488,48 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
         </div>` : '';
 
       const billHtml = `
-        <div style="font-family:Arial,sans-serif;font-size:13px;color:#000;padding:16mm;max-width:740px;margin:0 auto">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+        <div style="font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#000;padding:10mm 14mm;max-width:740px;margin:0 auto">
+          <!-- Header: GSTIN left | Address center | Logo+Name right -->
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;padding-bottom:12px;border-bottom:2px solid #222">
+            <div style="flex:1;text-align:left">
+              ${shop?.gst_number ? `<div style="font-size:11px;color:#444;font-weight:600">GSTIN</div><div style="font-size:13px;font-weight:bold;font-family:monospace">${shop.gst_number}</div>` : ''}
+            </div>
+            <div style="flex:1;text-align:center">
+              <div style="font-size:11px;color:#555;line-height:1.4">${shop?.shop_address || ''}</div>
+            </div>
+            <div style="flex:1;text-align:right;display:flex;flex-direction:column;align-items:flex-end">
+              ${shop?.logo_url ? `<img src="${shop.logo_url}" style="max-height:50px;max-width:120px;margin-bottom:6px;object-fit:contain" />` : ''}
+              <div style="font-size:18px;font-weight:bold;letter-spacing:0.5px">${shop?.shop_name || ''}</div>
+            </div>
+          </div>
+
+          <!-- Tax Invoice Title -->
+          <div style="text-align:center;margin:8px 0 12px">
+            <span style="font-size:14px;font-weight:bold;text-transform:uppercase;letter-spacing:2px;border:1.5px solid #222;padding:3px 16px">Tax Invoice</span>
+          </div>
+
+          <!-- Bill Info: Customer left | Bill# right -->
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
             <div>
-              ${shop?.logo_url ? `<img src="${shop.logo_url}" style="max-height:60px;margin-bottom:8px;display:block;filter:grayscale(100%)" />` : ''}
-              <div style="font-size:18px;font-weight:bold">${shop?.shop_name || ''}</div>
-              <div style="color:#555;font-size:12px">${shop?.shop_address || ''}</div>
-              ${shop?.gst_number ? `<div style="color:#555;font-size:12px">GSTIN: ${shop.gst_number}</div>` : ''}
+              <div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Bill To</div>
+              <div style="font-size:14px;font-weight:600">${customerName.trim()}</div>
+              <div style="color:#555;font-size:12px">${customerPhone.replace(/\\D/g, '').slice(-10)}</div>
             </div>
             <div style="text-align:right">
-              <div style="font-weight:bold;font-size:15px">${billNumber}</div>
+              <div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Invoice</div>
+              <div style="font-size:14px;font-weight:bold;font-family:monospace">${billNumber}</div>
               <div style="color:#555;font-size:12px">${new Date(billDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
             </div>
           </div>
-          <hr style="border:none;border-top:1.5px solid #ddd;margin:10px 0" />
-          <div style="margin-bottom:16px">
-            <div style="font-weight:600;margin-bottom:2px">Bill To:</div>
-            <div>${customerName.trim()}</div>
-            <div style="color:#555;font-size:12px">${customerPhone.replace(/\D/g, '').slice(-10)}</div>
-          </div>
+
+          <!-- Items -->
           ${itemsSection}
-          <div style="text-align:center;color:#999;font-size:11px;margin-top:24px;padding-top:10px;border-top:1px solid #eee">Thank you for your business!</div>
+
+          <!-- Footer -->
+          <div style="text-align:center;color:#888;font-size:11px;margin-top:28px;padding-top:12px;border-top:1px solid #ddd">
+            <div>Thank you for your business!</div>
+            <div style="margin-top:4px;font-size:9px;color:#aaa">This is a computer-generated invoice</div>
+          </div>
         </div>`;
 
       const existing = document.getElementById('bill-print-root');
@@ -525,7 +546,7 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
           html, body { background: white !important; color: black !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           body > *:not(#bill-print-root) { display: none !important; visibility: hidden !important; }
           #bill-print-root { display: block !important; visibility: visible !important; position: fixed !important; top: 0 !important; left: 0 !important; width: 100% !important; background: white !important; z-index: 999999 !important; }
-          @page { margin: 0; size: A4 portrait; }
+          @page { margin: 8mm; size: A4 portrait; }
         }
       `;
       document.head.appendChild(styleTag);
