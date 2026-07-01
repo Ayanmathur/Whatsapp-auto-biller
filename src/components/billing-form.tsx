@@ -551,21 +551,35 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
       `;
       document.head.appendChild(styleTag);
 
-      toast.success('Bill saved! Opening print...');
-      setTimeout(() => {
-        window.print();
-        window.onafterprint = () => {
+      const printWhenReady = () => {
+        setTimeout(() => {
+          window.print();
           const c = document.getElementById('bill-print-root');
           const s = document.getElementById('bill-print-style');
           if (c) c.remove();
           if (s) s.remove();
           window.onafterprint = null;
-        };
-      }, 150);
+          setIsSaving(false);
+          setSaving(null);
+        }, 150);
+      };
+
+      toast.success('Bill saved! Opening print...');
+
+      const imgInDOM = document.querySelector('#bill-print-root img') as HTMLImageElement;
+      if (imgInDOM) {
+        if (imgInDOM.complete) {
+          printWhenReady();
+        } else {
+          imgInDOM.onload = printWhenReady;
+          imgInDOM.onerror = printWhenReady;
+        }
+      } else {
+        printWhenReady();
+      }
     } catch (err) {
       console.error(err);
       toast.error('Failed to print.');
-    } finally {
       setIsSaving(false);
       setSaving(null);
     }
@@ -1016,8 +1030,8 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
         </CardHeader>
         <CardContent>
           {/* Desktop Table */}
-          <div className="hidden md:block rounded-md border [&>div]:overflow-visible">
-            <Table>
+          <div className="hidden md:block rounded-md border">
+            <Table wrapperClassName="overflow-visible">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[40px]">#</TableHead>
@@ -1162,7 +1176,8 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
               return (
                 <div
                   key={item.id}
-                  className="rounded-lg border p-4 space-y-3"
+                  className="rounded-lg border p-4 space-y-3 relative"
+                  style={{ zIndex: items.length - idx }}
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-muted-foreground">
