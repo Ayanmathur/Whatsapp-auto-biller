@@ -17,8 +17,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen">
       <Sidebar isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
       <div 
-        className="flex-1 transition-all duration-300"
-        style={{ marginLeft: isCollapsed ? '56px' : '256px' }}
+        className={`flex-1 transition-all duration-300 pt-14 md:pt-0 ml-0 ${
+          isCollapsed ? 'md:ml-14' : 'md:ml-64'
+        }`}
       >
         {children}
       </div>

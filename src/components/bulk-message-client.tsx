@@ -194,20 +194,23 @@ export function BulkMessageClient({ clientId }: { clientId?: string }) {
   return (
     <div className="space-y-4">
       {/* Automation status banner */}
-      <div style={{
-        background: shop?.whatsapp_automation_enabled ? '#f0fdf4' : '#fffbeb',
-        border: `1px solid ${shop?.whatsapp_automation_enabled ? '#86efac' : '#fcd34d'}`,
-        borderRadius: 10, padding: '12px 16px',
-        display: 'flex', alignItems: 'flex-start', gap: 10,
-      }}>
-        <span style={{ fontSize: 18 }}>{shop?.whatsapp_automation_enabled ? '✅' : '⚠️'}</span>
+      <div className={`rounded-[10px] px-4 py-3 flex items-start gap-2.5 border ${
+        shop?.whatsapp_automation_enabled
+          ? 'bg-green-50 border-green-300 dark:bg-green-950 dark:border-green-700'
+          : 'bg-amber-50 border-amber-300 dark:bg-amber-950 dark:border-amber-700'
+      }`}>
+        <span className="text-lg">{shop?.whatsapp_automation_enabled ? '✅' : '⚠️'}</span>
         <div>
-          <div style={{ fontWeight: 600, fontSize: 13, color: shop?.whatsapp_automation_enabled ? '#166534' : '#92400e' }}>
+          <div className={`font-semibold text-[13px] ${
+            shop?.whatsapp_automation_enabled
+              ? 'text-green-800 dark:text-green-300'
+              : 'text-amber-800 dark:text-amber-300'
+          }`}>
             {shop?.whatsapp_automation_enabled
               ? 'WhatsApp Automation Active — Broadcast uses API to auto-send'
               : 'WhatsApp Automation Disabled — Use manual Send buttons or enable API in Settings'}
           </div>
-          <div style={{ fontSize: 11, marginTop: 2, color: '#6b7280' }}>
+          <div className="text-[11px] mt-0.5 text-gray-500 dark:text-gray-400">
             <strong>Broadcast</strong> = same message to many customers at once &nbsp;|&nbsp;
             <strong>Templates</strong> = saved reusable message snippets you can pick per customer
           </div>
@@ -215,18 +218,16 @@ export function BulkMessageClient({ clientId }: { clientId?: string }) {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #e5e7eb' }}>
+      <div className="flex border-b border-gray-200 dark:border-gray-700">
         {(['broadcast', 'templates'] as const).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            style={{
-              padding: '10px 20px', fontSize: 14, fontWeight: 600,
-              background: 'none', border: 'none', cursor: 'pointer',
-              borderBottom: tab === t ? '2px solid #2563eb' : '2px solid transparent',
-              color: tab === t ? '#2563eb' : '#6b7280',
-              textTransform: 'capitalize',
-            }}
+            className={`min-h-[44px] px-5 text-sm font-semibold bg-transparent border-none cursor-pointer capitalize border-b-2 transition-colors ${
+              tab === t
+                ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
           >
             {t === 'broadcast' ? '📢 Broadcast' : '📝 Templates'}
           </button>
@@ -275,7 +276,7 @@ export function BulkMessageClient({ clientId }: { clientId?: string }) {
               <CardDescription>{customers.length} unique customers from your billing history.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="rounded-md border" style={{ maxHeight: 480, overflowY: 'auto' }}>
+              <div className="rounded-md border max-h-[480px] overflow-y-auto overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -303,7 +304,7 @@ export function BulkMessageClient({ clientId }: { clientId?: string }) {
                           <TableCell className="text-right">
                             <button
                               onClick={() => openManualWhatsApp(c)}
-                              style={{ background: '#25d366', color: 'white', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}
+                              className="min-h-[44px] min-w-[44px] bg-[#25d366] hover:bg-[#1da851] text-white border-none rounded-md px-3 text-xs cursor-pointer font-semibold transition-colors dark:bg-[#25d366] dark:hover:bg-[#1da851]"
                             >
                               📞 Send
                             </button>
@@ -338,7 +339,7 @@ export function BulkMessageClient({ clientId }: { clientId?: string }) {
               ) : (
                 <div className="space-y-3">
                   {templates.map(t => (
-                    <div key={t.id} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px' }}>
+                    <div key={t.id} className="border border-gray-200 dark:border-gray-700 rounded-[10px] px-4 py-3">
                       {editingTemplate?.id === t.id ? (
                         <div className="space-y-2">
                           <Input value={editingTemplate.label} onChange={e => setEditingTemplate({ ...editingTemplate, label: e.target.value })} placeholder="Template label" />
@@ -350,24 +351,24 @@ export function BulkMessageClient({ clientId }: { clientId?: string }) {
                         </div>
                       ) : (
                         <>
-                          <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{t.label}</div>
-                          <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10, whiteSpace: 'pre-wrap' }}>{t.body}</div>
+                          <div className="font-semibold text-[13px] mb-1">{t.label}</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-2.5 whitespace-pre-wrap">{t.body}</div>
                           <div className="flex gap-2 flex-wrap">
                             <Button size="sm" variant="outline" onClick={() => startEdit(t)}>✏️ Edit</Button>
-                            <Button size="sm" variant="outline" onClick={() => deleteTemplate(t.id)} style={{ color: '#dc2626', borderColor: '#fca5a5' }}>🗑️ Delete</Button>
+                            <Button size="sm" variant="outline" onClick={() => deleteTemplate(t.id)} className="text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-950">🗑️ Delete</Button>
                           </div>
 
                           {/* Use template for a specific customer */}
                           {customers.length > 0 && (
-                            <details style={{ marginTop: 8 }}>
-                              <summary style={{ fontSize: 12, cursor: 'pointer', color: '#2563eb', fontWeight: 600 }}>📞 Send to a customer</summary>
-                              <div style={{ marginTop: 6, maxHeight: 200, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 6 }}>
+                            <details className="mt-2">
+                              <summary className="text-xs cursor-pointer text-blue-600 dark:text-blue-400 font-semibold min-h-[44px] flex items-center">📞 Send to a customer</summary>
+                              <div className="mt-1.5 max-h-[200px] overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-md">
                                 {customers.map(c => (
-                                  <div key={c.phone} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 12px', borderBottom: '1px solid #f3f4f6' }}>
-                                    <span style={{ fontSize: 12 }}>{c.name} · {c.phone}</span>
+                                  <div key={c.phone} className="flex justify-between items-center px-3 min-h-[44px] border-b border-gray-100 dark:border-gray-800 last:border-b-0">
+                                    <span className="text-xs">{c.name} · {c.phone}</span>
                                     <button
                                       onClick={() => openManualWhatsApp(c, t.body)}
-                                      style={{ background: '#25d366', color: 'white', border: 'none', borderRadius: 5, padding: '3px 10px', fontSize: 11, cursor: 'pointer' }}
+                                      className="min-h-[44px] min-w-[44px] bg-[#25d366] hover:bg-[#1da851] text-white border-none rounded-[5px] px-2.5 text-[11px] cursor-pointer font-semibold transition-colors"
                                     >
                                       Send
                                     </button>

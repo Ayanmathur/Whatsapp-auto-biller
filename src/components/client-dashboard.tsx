@@ -359,7 +359,7 @@ export function ClientDashboard({ clientId }: { clientId?: string }) {
       </Card>
 
       {/* Action Row */}
-      <div className="flex justify-between items-center bg-card border rounded-lg p-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center flex-wrap gap-2 bg-card border rounded-lg p-4">
         <div>
           <h3 className="font-semibold">Bulk Message Sender</h3>
           <p className="text-sm text-muted-foreground">Send WhatsApp messages to all unsent customers in the selected period.</p>
@@ -367,6 +367,7 @@ export function ClientDashboard({ clientId }: { clientId?: string }) {
         <Button 
           onClick={handleBulkSend} 
           disabled={sendingBulk || !shop?.whatsapp_enabled}
+          className="w-full sm:w-auto min-h-[44px]"
         >
           {sendingBulk && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
           Bulk Send ({filteredBills.filter(b => !b.whatsapp_sent).length} unsent)
@@ -380,8 +381,8 @@ export function ClientDashboard({ clientId }: { clientId?: string }) {
           <CardDescription>View customers and their message status.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border">
-            <Table>
+          <div className="rounded-md border overflow-x-auto">
+            <Table className="min-w-[600px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Customer</TableHead>
@@ -400,32 +401,19 @@ export function ClientDashboard({ clientId }: { clientId?: string }) {
                     <TableCell>{new Date(bill.created_at).toLocaleDateString("en-IN")}</TableCell>
                     <TableCell className="text-center">
                       {bill.whatsapp_sent ? (
-                        <span style={{
-                          background:'#dcfce7', color:'#166534',
-                          padding:'2px 8px', borderRadius:'20px',
-                          fontSize:'11px', fontWeight:'500'
-                        }}>
+                        <span className="inline-flex items-center min-h-[44px] sm:min-h-0 px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
                           ✅ Sent
                         </span>
                       ) : (
-                        <div style={{display:'flex',alignItems:'center',gap:6,justifyContent:'center'}}>
-                          <span style={{
-                            background:'#f3f4f6', color:'#666',
-                            padding:'2px 8px', borderRadius:'20px',
-                            fontSize:'11px', fontWeight:'500'
-                          }}>
+                        <div className="flex items-center gap-2 justify-center">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground">
                             Not Sent
                           </span>
                           <button
                             type="button"
                             onClick={() => handleResend(bill)}
                             disabled={sendingSingle === bill.id}
-                            style={{
-                              background:'#25d366', color:'white', border:'none',
-                              borderRadius:'6px', padding:'3px 8px',
-                              fontSize:'11px', cursor:'pointer',
-                              opacity: sendingSingle === bill.id ? 0.7 : 1
-                            }}
+                            className="inline-flex items-center justify-center min-h-[44px] sm:min-h-0 px-3 py-1.5 rounded-md text-xs font-medium text-white bg-[#25d366] hover:bg-[#1da851] disabled:opacity-70 cursor-pointer transition-colors"
                           >
                             {sendingSingle === bill.id ? 'Sending...' : '📞 Send'}
                           </button>
@@ -436,7 +424,7 @@ export function ClientDashboard({ clientId }: { clientId?: string }) {
                 ))}
                 {filteredBills.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                    <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
                       No records found for the selected period.
                     </TableCell>
                   </TableRow>

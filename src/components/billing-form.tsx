@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import type { BillSize, ProductEntry, DiscountType, ExtraCharge } from "@/types/database";
 import { useHardwareScanner } from "@/hooks/useHardwareScanner";
+import { usePhoneScanner } from "@/hooks/usePhoneScanner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -135,6 +136,9 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
   const [hardwareScannerEnabled, setHardwareScannerEnabled] = useState(true);
   const [lastScanFeedback, setLastScanFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [manualBarcode, setManualBarcode] = useState('');
+
+  // Phone scanner (Realtime bridge)
+  const [showPhoneQR, setShowPhoneQR] = useState(false);
 
   // Discount & Extra Charges
   const [discountType, setDiscountType] = useState<DiscountType>('none');
@@ -692,6 +696,14 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
     maxGap: 50,
   });
 
+  // Wire the phone scanner hook (Realtime bridge)
+  const {
+    sessionId: phoneScannerSession,
+    isConnected: phoneConnected,
+    startSession: startPhoneSession,
+    stopSession: stopPhoneSession,
+  } = usePhoneScanner({ onScan: handleHardwareScan });
+
   // ── Loading state ─────────────────────────────────────────────
   if (loadingShop) {
     return (
@@ -828,6 +840,58 @@ export function BillingForm({ clientId, editBillId }: { clientId?: string, editB
           }} />
         </div>
       </div>
+
+      {/* Phone Scanner Link Button */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        {!phoneScannerSession ? (
+          <button
+            type="button"
+            onClick={() => { startPhoneSession(); setShowPhoneQR(true); }}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors"
+            style={{ background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}
+          >
+            📱 Link Phone as Scanner
+          </button>
+        ) : (
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold"
+              style={{ background: phoneConnected ? '#f0fdf4' : '#fef9c3', color: phoneConnected ? '#166534' : '#854d0e', border: '1px solid ' + (phoneConnected ? '#86efac' : '#fde047') }}>
+              {phoneConnected ? '📱 Phone Connected' : '📱 Waiting for phone...'}
+            </span>
+            <button type="button" onClick={() => setShowPhoneQR(true)}
+              className="text-xs text-blue-600 underline">Show QR</button>
+            <button type="button" onClick={() => { stopPhoneSession(); setShowPhoneQR(false); }}
+              className="text-xs text-red-600 underline">Disconnect</button>
+          </div>
+        )}
+      </div>
+
+      {/* Phone Scanner QR Modal */}
+      {showPhoneQR && phoneScannerSession && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}
+          onClick={() => setShowPhoneQR(false)}>
+          <div onClick={e => e.stopPropagation()}
+            className="bg-white dark:bg-gray-900 rounded-2xl p-8 text-center shadow-2xl"
+            style={{ maxWidth: 340, width: '90vw' }}>
+            <h3 className="text-lg font-bold mb-2">📱 Link Your Phone</h3>
+            <p className="text-sm text-gray-500 mb-4">Open the Scanner tab in the Bill Door app and tap &quot;Link to Web&quot;, then scan this QR code.</p>
+            <div className="flex justify-center mb-4">
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent('billdoor://scan/' + phoneScannerSession)}`}
+                alt="Scan this QR code"
+                width={200} height={200}
+                style={{ borderRadius: 12 }}
+              />
+            </div>
+            <div className="text-xs text-gray-400 mb-1">Session Code</div>
+            <div className="text-2xl font-mono font-bold tracking-widest text-blue-600 mb-4">{phoneScannerSession}</div>
+            <button type="button" onClick={() => setShowPhoneQR(false)}
+              className="w-full py-3 rounded-lg text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors">
+              Done
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Manual Barcode Input */}
       <div style={{display:'flex', gap:8, marginBottom:14}}>

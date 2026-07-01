@@ -400,7 +400,8 @@ export function HistoryClient({ clientId }: { clientId?: string }) {
           <CardDescription>Found {bills.length} bills matching your criteria.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border">
+          {/* Desktop Table — hidden on mobile */}
+          <div className="hidden md:block rounded-md border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -436,23 +437,12 @@ export function HistoryClient({ clientId }: { clientId?: string }) {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div style={{display:'flex',gap:'6px',justifyContent:'flex-end'}}>
+                        <div className="flex gap-1.5 justify-end">
                           <button
                             type="button"
                             onClick={() => handleWhatsappFromHistory(b)}
                             title="Send WhatsApp"
-                            style={{
-                              background: '#25d366',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '8px',
-                              padding: '6px 10px',
-                              cursor: 'pointer',
-                              fontSize: '16px',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
+                            className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg bg-[#25d366] text-white border-none cursor-pointer text-base hover:opacity-90 transition-opacity"
                           >
                             📞
                           </button>
@@ -460,14 +450,7 @@ export function HistoryClient({ clientId }: { clientId?: string }) {
                             type="button"
                             onClick={() => handleHistoryPrint(b)}
                             title="Print Bill"
-                            style={{
-                              background: '#f3f4f6',
-                              border: '1px solid #d1d5db',
-                              borderRadius: '8px',
-                              padding: '6px 10px',
-                              cursor: 'pointer',
-                              fontSize: '16px',
-                            }}
+                            className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg bg-muted border border-border cursor-pointer text-base hover:bg-accent transition-colors"
                           >
                             🖨️
                           </button>
@@ -479,18 +462,11 @@ export function HistoryClient({ clientId }: { clientId?: string }) {
                               setEditPhone(b.customer_phone);
                             }}
                             title="Edit Bill"
-                            style={{
-                              background: '#f3f4f6',
-                              border: '1px solid #d1d5db',
-                              borderRadius: '8px',
-                              padding: '6px 10px',
-                              cursor: 'pointer',
-                              fontSize: '13px',
-                            }}
+                            className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg bg-muted border border-border cursor-pointer text-sm hover:bg-accent transition-colors"
                           >
                             ✏️
                           </button>
-                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDelete(b.id)}>
+                          <Button variant="ghost" size="sm" className="min-h-[44px] text-destructive hover:text-destructive" onClick={() => handleDelete(b.id)}>
                             Delete
                           </Button>
                         </div>
@@ -501,46 +477,104 @@ export function HistoryClient({ clientId }: { clientId?: string }) {
               </TableBody>
             </Table>
           </div>
+
+          {/* Mobile Card View — hidden on md+ */}
+          <div className="md:hidden space-y-3">
+            {loading ? (
+              <p className="text-center py-8 text-muted-foreground">Loading bills...</p>
+            ) : bills.length === 0 ? (
+              <p className="text-center py-8 text-muted-foreground">No bills found.</p>
+            ) : (
+              bills.map((b) => (
+                <div key={b.id} className="rounded-lg border p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-1 min-w-0">
+                      <p className="font-mono text-sm font-medium">{b.bill_number}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(b.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                    <Badge variant={b.whatsapp_sent ? "secondary" : "outline"} className={b.whatsapp_sent ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-100 shrink-0" : "shrink-0"}>
+                      {b.whatsapp_sent ? "Sent" : "Not Sent"}
+                    </Badge>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                    <div>
+                      <span className="text-muted-foreground text-xs">Customer</span>
+                      <p className="truncate">{b.customer_name || "-"}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground text-xs">Phone</span>
+                      <p className="truncate">{b.customer_phone || "-"}</p>
+                    </div>
+                  </div>
+                  <div className="text-lg font-semibold">₹{b.total}</div>
+                  <div className="flex gap-2 pt-1 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => handleWhatsappFromHistory(b)}
+                      title="Send WhatsApp"
+                      className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg bg-[#25d366] text-white border-none cursor-pointer text-base hover:opacity-90 transition-opacity"
+                    >
+                      📞
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleHistoryPrint(b)}
+                      title="Print Bill"
+                      className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg bg-muted border border-border cursor-pointer text-base hover:bg-accent transition-colors"
+                    >
+                      🖨️
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingBill(b);
+                        setEditName(b.customer_name);
+                        setEditPhone(b.customer_phone);
+                      }}
+                      title="Edit Bill"
+                      className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg bg-muted border border-border cursor-pointer text-sm hover:bg-accent transition-colors"
+                    >
+                      ✏️
+                    </button>
+                    <Button variant="ghost" size="sm" className="min-h-[44px] text-destructive hover:text-destructive" onClick={() => handleDelete(b.id)}>
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </CardContent>
       </Card>
 
       {editingBill && (
-        <div style={{
-          position:'fixed', inset:0, background:'rgba(0,0,0,0.4)',
-          display:'flex', alignItems:'center', justifyContent:'center',
-          zIndex:1000
-        }}>
-          <div style={{
-            background:'white', borderRadius:'12px',
-            padding:'28px', width:'360px',
-            boxShadow:'0 10px 40px rgba(0,0,0,0.15)'
-          }}>
-            <h3 style={{marginBottom:16,fontSize:'16px',fontWeight:'600'}}>
+        <div
+          className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40"
+          onClick={(e) => { if (e.target === e.currentTarget) setEditingBill(null); }}
+        >
+          <div className="bg-card text-card-foreground rounded-xl p-7 w-[90vw] max-w-[360px] shadow-[0_10px_40px_rgba(0,0,0,0.15)]">
+            <h3 className="mb-4 text-base font-semibold">
               Edit Bill — {editingBill.bill_number}
             </h3>
-            <label style={{fontSize:'13px',fontWeight:'500'}}>
+            <label className="text-[13px] font-medium">
               Customer Name
             </label>
             <input
               value={editName}
               onChange={e => setEditName(e.target.value)}
-              style={{width:'100%',padding:'8px 10px',
-                border:'1px solid #d1d5db',borderRadius:'8px',
-                marginBottom:'12px',marginTop:'4px',
-                fontSize:'14px',boxSizing:'border-box'}}
+              className="w-full px-2.5 py-2 border border-border rounded-lg mb-3 mt-1 text-sm bg-background text-foreground box-border focus:outline-none focus:ring-2 focus:ring-ring"
             />
-            <label style={{fontSize:'13px',fontWeight:'500'}}>
+            <label className="text-[13px] font-medium">
               Phone Number
             </label>
             <input
               value={editPhone}
               onChange={e => setEditPhone(e.target.value)}
-              style={{width:'100%',padding:'8px 10px',
-                border:'1px solid #d1d5db',borderRadius:'8px',
-                marginBottom:'20px',marginTop:'4px',
-                fontSize:'14px',boxSizing:'border-box'}}
+              className="w-full px-2.5 py-2 border border-border rounded-lg mb-5 mt-1 text-sm bg-background text-foreground box-border focus:outline-none focus:ring-2 focus:ring-ring"
             />
-            <div style={{display:'flex',gap:10}}>
+            <div className="flex gap-2.5">
               <button
                 type="button"
                 onClick={async () => {
@@ -557,18 +591,14 @@ export function HistoryClient({ clientId }: { clientId?: string }) {
                   setEditingBill(null);
                   toast.success('Bill updated successfully.');
                 }}
-                style={{flex:1,background:'#2563eb',color:'white',
-                  border:'none',borderRadius:'8px',padding:'10px',
-                  fontSize:'14px',cursor:'pointer',fontWeight:'500'}}
+                className="flex-1 min-h-[44px] bg-primary text-primary-foreground border-none rounded-lg px-3 py-2.5 text-sm cursor-pointer font-medium hover:bg-primary/90 transition-colors"
               >
                 Save
               </button>
               <button
                 type="button"
                 onClick={() => setEditingBill(null)}
-                style={{flex:1,background:'white',color:'#555',
-                  border:'1px solid #d1d5db',borderRadius:'8px',
-                  padding:'10px',fontSize:'14px',cursor:'pointer'}}
+                className="flex-1 min-h-[44px] bg-card text-muted-foreground border border-border rounded-lg px-3 py-2.5 text-sm cursor-pointer hover:bg-accent transition-colors"
               >
                 Cancel
               </button>
